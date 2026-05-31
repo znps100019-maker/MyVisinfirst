@@ -10,7 +10,7 @@ $code = @"
 import ast
 from pathlib import Path
 
-for filename in ("main.py", "arm_detector.py", "hand_detector.py"):
+for filename in ("main.py", "arm_detector.py", "hand_detector.py", "test_camera_mesh.py"):
     source = Path(filename).read_text(encoding="utf-8")
     ast.parse(source, filename=filename)
 
