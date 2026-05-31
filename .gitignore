@@ -1,0 +1,15 @@
+.venv/
+.uv-cache/
+.uv-python/
+.pip-cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+.env
+.env.*
+
+.vscode/
+*.code-workspace
+
+tools/
