@@ -126,7 +126,7 @@ def main():
     stage = None
     last_print_time = 0
 
-    cap = cv2.VideoCapture(args.camera)
+    cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
     configure_camera(cap, args)
 
     if not cap.isOpened():

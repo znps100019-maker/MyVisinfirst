@@ -11,7 +11,7 @@ def main():
     working_index = None
     
     # 優先嘗試預設索引 0
-    test_cap = cv2.VideoCapture(0)
+    test_cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     if test_cap.isOpened():
         success, _ = test_cap.read()
         if success:
@@ -25,7 +25,7 @@ def main():
     if cap is None:
         print("正在嘗試自動尋找其他可用的相機索引（1 到 5）...")
         for index in range(1, 6):
-            test_cap = cv2.VideoCapture(index)
+            test_cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
             if test_cap.isOpened():
                 success, _ = test_cap.read()
                 if success:
