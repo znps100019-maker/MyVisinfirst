@@ -61,6 +61,6 @@ while True:
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-
+# 紀錄一下
 cap.release()
 cv2.destroyAllWindows()
