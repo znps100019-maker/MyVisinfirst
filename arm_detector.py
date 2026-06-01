@@ -8,6 +8,7 @@ mp_pose = mp.solutions.pose
 
 class ArmDetector:
     def __init__(self):
+        # Pose 模型用來偵測身體關節，這裡只取右肩、右手肘、右手腕。
         self.pose = mp_pose.Pose(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
@@ -16,6 +17,8 @@ class ArmDetector:
     def find_arm_points(self, img):
         """Return right shoulder, elbow, and wrist points from a video frame."""
         height, width, _ = img.shape
+
+        # MediaPipe 使用 RGB，OpenCV 攝影機影像是 BGR，所以要先轉換。
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.pose.process(img_rgb)
 
@@ -23,6 +26,8 @@ class ArmDetector:
             return None
 
         landmarks = results.pose_landmarks.landmark
+        # MediaPipe Pose: 12=右肩、14=右手肘、16=右手腕。
+        # landmark 原本是 0~1 的比例座標，這裡轉成實際影像像素座標。
         shoulder = [
             int(landmarks[12].x * width),
             int(landmarks[12].y * height),
@@ -39,6 +44,7 @@ class ArmDetector:
         return shoulder, elbow, wrist
 
     def find_arm_joints(self, img):
+        # 回傳結構化資料，讓主程式可以直接畫點、輸出 JSON 或計算動作。
         points = self.find_arm_points(img)
         if points is None:
             return None
@@ -56,6 +62,7 @@ class ArmDetector:
 
     def calculate_angle(self, a, b, c):
         """Calculate the angle at point b from points a, b, and c."""
+        # 計算 a-b-c 的夾角；在這個專案中 b 是手肘，所以得到手肘彎曲角度。
         a = np.array(a)
         b = np.array(b)
         c = np.array(c)

@@ -12,6 +12,7 @@ mp_hands = mp.solutions.hands
 class HandSignRecognizer:
     """Detect hand landmarks and classify simple static hand signs."""
 
+    # MediaPipe Hands 會回傳 21 個手部關節點，這些數字是各手指指尖的 landmark index。
     FINGER_TIPS = {
         "thumb": 4,
         "index": 8,
@@ -19,12 +20,14 @@ class HandSignRecognizer:
         "ring": 16,
         "pinky": 20,
     }
+    # PIP 是手指中間關節，用來判斷手指是否伸直。
     FINGER_PIPS = {
         "index": 6,
         "middle": 10,
         "ring": 14,
         "pinky": 18,
     }
+    # MCP 是手指根部關節，可和 PIP、TIP 一起比較位置。
     FINGER_MCPS = {
         "thumb": 2,
         "index": 5,
@@ -32,6 +35,7 @@ class HandSignRecognizer:
         "ring": 13,
         "pinky": 17,
     }
+    # 把 MediaPipe 的 0~20 關節編號轉成容易理解的名稱。
     LANDMARK_NAMES = [
         "wrist",
         "thumb_cmc",
@@ -87,23 +91,27 @@ class HandSignRecognizer:
     }
 
     def __init__(self, max_num_hands=2, history_size=8, stable_min_count=5):
+        # min_detection_confidence 越高越不容易誤判，但太高可能比較難偵測到手。
         self.hands = mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=max_num_hands,
             min_detection_confidence=0.7,
             min_tracking_confidence=0.6,
         )
+        # history 用來保存最近幾次辨識結果，避免手勢瞬間跳動造成誤判。
         self.history = deque(maxlen=history_size)
         self.stable_min_count = stable_min_count
 
     def process(self, frame):
         """Return detected hands with landmarks, handedness, and sign labels."""
+        # OpenCV 讀到的是 BGR，MediaPipe 需要 RGB，所以要先轉色彩格式。
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.hands.process(rgb)
 
         detections = []
         if not results.multi_hand_landmarks:
+            # 沒有看到手時也記錄 No hand，讓穩定狀態能正確回到無手。
             self.history.append("No hand")
             return detections
 
@@ -114,6 +122,7 @@ class HandSignRecognizer:
             if index < len(handedness_list):
                 handedness = handedness_list[index].classification[0].label
 
+            # 先判斷每根手指是否伸直，再用規則分類成手勢名稱。
             fingers = self._extended_fingers(landmarks, handedness)
             sign = self._classify_sign(fingers, landmarks)
             detections.append(
@@ -134,6 +143,7 @@ class HandSignRecognizer:
     def draw(self, frame, detections, target_sign=None):
         """Draw hand skeletons and sign labels on a video frame."""
         for detection in detections:
+            # 畫出 MediaPipe 手部骨架線與 21 個關節點。
             mp_drawing.draw_landmarks(
                 frame,
                 detection["landmarks"],
@@ -154,6 +164,7 @@ class HandSignRecognizer:
 
         stable = self.stable_status
         stable_sign = stable["sign"]
+        # 左上角資訊框顯示目前穩定手勢與信心比例。
         cv2.rectangle(frame, (0, 100), (520, 190), (0, 0, 0), cv2.FILLED)
         cv2.putText(
             frame,
@@ -188,6 +199,7 @@ class HandSignRecognizer:
 
     @property
     def stable_status(self):
+        # 從最近幾次辨識結果中選出出現最多次的手勢，當作穩定手勢。
         if not self.history:
             return {
                 "sign": "No hand",
@@ -209,6 +221,7 @@ class HandSignRecognizer:
 
     @classmethod
     def normalize_sign(cls, sign):
+        # 允許使用者輸入 peace、1、thumb 這類簡短名稱，轉成正式手勢名稱。
         if not sign:
             return ""
 
@@ -224,6 +237,7 @@ class HandSignRecognizer:
         return cleaned
 
     def is_target_detected(self, target_sign):
+        # 只有「穩定手勢」等於目標手勢時才算命中，避免單幀誤判。
         target_sign = self.normalize_sign(target_sign)
         stable = self.stable_status
         return (
@@ -238,11 +252,13 @@ class HandSignRecognizer:
 
         for finger, tip_id in self.FINGER_TIPS.items():
             if finger == "thumb":
+                # 大拇指方向和左右手有關，所以另外判斷。
                 fingers[finger] = self._is_thumb_extended(points, handedness)
                 continue
 
             pip_id = self.FINGER_PIPS[finger]
             mcp_id = self.FINGER_MCPS[finger]
+            # 影像座標 y 越小代表越上方；指尖比中關節和根部更上方時，視為手指伸直。
             fingers[finger] = (
                 points[tip_id].y < points[pip_id].y
                 and points[pip_id].y < points[mcp_id].y
@@ -251,6 +267,7 @@ class HandSignRecognizer:
         return fingers
 
     def _is_thumb_extended(self, points, handedness):
+        # 大拇指主要看 x 方向，右手和左手伸出的方向剛好相反。
         tip = points[self.FINGER_TIPS["thumb"]]
         mcp = points[self.FINGER_MCPS["thumb"]]
 
@@ -262,6 +279,7 @@ class HandSignRecognizer:
         return abs(tip.x - mcp.x) > 0.08
 
     def _classify_sign(self, fingers, landmarks):
+        # 這裡是規則式手勢分類：依照哪幾根手指伸直來決定手勢。
         thumb = fingers["thumb"]
         index = fingers["index"]
         middle = fingers["middle"]
@@ -292,6 +310,7 @@ class HandSignRecognizer:
         return "Unknown"
 
     def _is_ok_sign(self, landmarks):
+        # OK 手勢的特徵是大拇指指尖和食指指尖靠近形成圈。
         points = landmarks.landmark
         thumb_tip = points[self.FINGER_TIPS["thumb"]]
         index_tip = points[self.FINGER_TIPS["index"]]
