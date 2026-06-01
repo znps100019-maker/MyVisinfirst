@@ -1,0 +1,17 @@
+.venv/
+.python310/
+.uv-cache/
+.uv-python/
+.pip-cache/
+__pycache__/
+*.py[cod]
+*$py.class
+python-*.exe
+
+.env
+.env.*
+
+.vscode/
+*.code-workspace
+
+tools/
