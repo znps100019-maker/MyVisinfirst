@@ -252,31 +252,41 @@ class HandSignRecognizer:
 
         for finger, tip_id in self.FINGER_TIPS.items():
             if finger == "thumb":
-                # 大拇指方向和左右手有關，所以另外判斷。
                 fingers[finger] = self._is_thumb_extended(points, handedness)
                 continue
 
-            pip_id = self.FINGER_PIPS[finger]
-            mcp_id = self.FINGER_MCPS[finger]
-            # 影像座標 y 越小代表越上方；指尖比中關節和根部更上方時，視為手指伸直。
-            fingers[finger] = (
-                points[tip_id].y < points[pip_id].y
-                and points[pip_id].y < points[mcp_id].y
+            # 其他四隻手指：利用 MCP(根部) 到 TIP(指尖) 的直線長度與分段長度總和比例判定
+            base_idx = self.FINGER_MCPS[finger]
+            mcp = points[base_idx]
+            pip = points[base_idx + 1]  # PIP
+            dip = points[base_idx + 2]  # DIP
+            tip = points[base_idx + 3]  # TIP
+
+            straight = self._distance(mcp, tip)
+            segments = (
+                self._distance(mcp, pip)
+                + self._distance(pip, dip)
+                + self._distance(dip, tip)
             )
+            # 3D 空間直線距離與各分段長度之和的比例大於 0.82 視為伸直
+            fingers[finger] = (straight / max(segments, 0.001)) > 0.82
 
         return fingers
 
     def _is_thumb_extended(self, points, handedness):
-        # 大拇指主要看 x 方向，右手和左手伸出的方向剛好相反。
-        tip = points[self.FINGER_TIPS["thumb"]]
-        mcp = points[self.FINGER_MCPS["thumb"]]
-
-        if handedness == "Right":
-            return tip.x < mcp.x
-        if handedness == "Left":
-            return tip.x > mcp.x
-
-        return abs(tip.x - mcp.x) > 0.08
+        # 大拇指：利用 CMC(1) 到 TIP(4) 的直線長度與分段長度總和比例判定（排除左右手與旋轉限制）
+        cmc = points[1]
+        mcp = points[2]
+        ip = points[3]
+        tip = points[4]
+        
+        straight = self._distance(cmc, tip)
+        segments = (
+            self._distance(cmc, mcp)
+            + self._distance(mcp, ip)
+            + self._distance(ip, tip)
+        )
+        return (straight / max(segments, 0.001)) > 0.86
 
     def _classify_sign(self, fingers, landmarks):
         # 這裡是規則式手勢分類：依照哪幾根手指伸直來決定手勢。
