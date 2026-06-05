@@ -17,6 +17,7 @@ for filename in (
     "hand_detector.py",
     "test.py",
     "test_camera_mesh.py",
+    "mediapipe_hand_landmarks_01.py",
 ):
     source = Path(filename).read_text(encoding="utf-8")
     ast.parse(source, filename=filename)

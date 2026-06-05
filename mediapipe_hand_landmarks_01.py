@@ -36,23 +36,29 @@ options = vision.HandLandmarkerOptions(
     min_tracking_confidence=0.5)
 detector = vision.HandLandmarker.create_from_options(options)
 
-# 開啟攝影機            編號代表不同的鏡頭，例如筆電可能有前後鏡頭，分別代表編號1與編號0
-cap = cv2.VideoCapture(0)
+# 開啟攝影機（加入 cv2.CAP_DSHOW 以相容 Windows 系統，避免無法讀取畫面）
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 # 設定鏡頭解析度為 1280x720
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 # 判斷攝影機是否處於開啟狀態
+empty_frame_count = 0
 while cap.isOpened():
     # 如果成功擷取會回傳兩個值，分別存放至success及frame
     # success: True or False，代表是否成功讀取到圖片
     # frame: 讀取到的那一個frame
     success, frame = cap.read()
     
-    # 增加讀取frame錯誤的判斷，並繼續下一次的擷取
+    # 增加讀取frame錯誤的判斷，限制重試次數，避免無限迴圈造成 CPU 滿載
     if not success:
-        print("Ignoring empty camera frame.")
+        empty_frame_count += 1
+        print(f"Ignoring empty camera frame ({empty_frame_count}/10).")
+        if empty_frame_count >= 10:
+            print("【錯誤】連續 10 次讀取到空畫面，請確認相機是否被其他程式佔用，或嘗試重插拔 USB。")
+            break
         continue
+    empty_frame_count = 0
     
     # 透過函數cvtColor將圖片顏色進行轉換，因為OpenCV預設的顏色是BGR，而圖片是RGB
     frame = cv2.flip(frame, 1)  # 水平翻轉
