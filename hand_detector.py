@@ -164,31 +164,36 @@ class HandSignRecognizer:
 
         stable = self.stable_status
         stable_sign = stable["sign"]
-        # 左上角資訊框顯示目前穩定手勢與信心比例。
-        cv2.rectangle(frame, (0, 100), (520, 190), (0, 0, 0), cv2.FILLED)
-        cv2.putText(
-            frame,
-            f"SIGN: {stable_sign} ({stable['confidence']:.0%})",
-            (10, 140),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.9,
-            (0, 255, 255),
-            2,
-        )
-        if target_sign:
-            target_sign = self.normalize_sign(target_sign)
-            detected = self.is_target_detected(target_sign)
-            color = (0, 255, 0) if detected else (180, 180, 180)
-            text = "TARGET HIT" if detected else "TARGET WAIT"
+        
+        # 只有在偵測到手勢（非 No hand）時，才顯示精簡的提示框，避免遮擋鏡頭
+        if stable_sign != "No hand":
+            # 依據是否有目標手勢，動態決定黑框高度
+            box_bottom = 85 if target_sign else 55
+            cv2.rectangle(frame, (10, 10), (325, box_bottom), (0, 0, 0), cv2.FILLED)
+            
             cv2.putText(
                 frame,
-                f"{text}: {target_sign}",
-                (10, 175),
+                f"SIGN: {stable_sign} ({stable['confidence']:.0%})",
+                (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.75,
-                color,
+                0.7,
+                (0, 255, 255),
                 2,
             )
+            if target_sign:
+                target_sign = self.normalize_sign(target_sign)
+                detected = self.is_target_detected(target_sign)
+                color = (0, 255, 0) if detected else (180, 180, 180)
+                text = "TARGET HIT" if detected else "TARGET WAIT"
+                cv2.putText(
+                    frame,
+                    f"{text}: {target_sign}",
+                    (20, 72),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    color,
+                    2,
+                )
 
     def close(self):
         self.hands.close()
@@ -324,7 +329,7 @@ class HandSignRecognizer:
 
         # 透過大拇指張開幅度（與食指根部的距離比例）來精準區分 1-4 與 5-9
         spread_ratio = self._thumb_spread_ratio(landmarks)
-        is_thumb_spread = spread_ratio > 0.52
+        is_thumb_spread = spread_ratio > 0.58
 
         if not is_thumb_spread:
             # 大拇指收起/貼近手掌：判定 1-4 與 拳頭
