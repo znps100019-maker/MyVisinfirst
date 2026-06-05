@@ -68,6 +68,11 @@ class HandSignRecognizer:
         "Number 2",
         "Number 3",
         "Number 4",
+        "Number 5 (Open palm)",
+        "Number 6",
+        "Number 7",
+        "Number 8",
+        "Number 9",
         "I love you",
         "Pinky",
         "Unknown",
@@ -78,14 +83,19 @@ class HandSignRecognizer:
         "2": "Number 2",
         "3": "Number 3",
         "4": "Number 4",
+        "5": "Number 5 (Open palm)",
+        "6": "Number 6",
+        "7": "Number 7",
+        "8": "Number 8",
+        "9": "Number 9",
         "point": "Number 1",
         "point / 1": "Number 1",
         "v": "Number 2",
         "peace": "Number 2",
         "v / peace": "Number 2",
-        "five": "Open palm",
-        "open": "Open palm",
-        "palm": "Open palm",
+        "five": "Number 5 (Open palm)",
+        "open": "Number 5 (Open palm)",
+        "palm": "Number 5 (Open palm)",
         "thumb": "Thumbs up",
         "thumbs": "Thumbs up",
     }
@@ -350,17 +360,19 @@ class HandSignRecognizer:
             if index and not middle and not ring and not pinky:
                 return "Number 1"
         else:
-            # 大拇指張開：判定 5-9
+            # 大拇指張開：判定 5-9 及 Thumbs up
             if index and middle and ring and pinky:
-                return "Number 9 (Open palm)"
+                return "Number 5 (Open palm)"
             if index and middle and ring and not pinky:
-                return "Number 8"
+                return "Number 9"
             if index and middle and not ring and not pinky:
-                return "Number 7"
+                return "Number 8"
             if index and not middle and not ring and not pinky:
+                return "Number 7"
+            if pinky and not index and not middle and not ring:
                 return "Number 6"
             if not any([index, middle, ring, pinky]):
-                return "Number 5 (Thumbs up)"
+                return "Thumbs up"
 
         return "Unknown"
 

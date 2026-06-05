@@ -87,7 +87,7 @@ def build_args():
         "--target-sign",
         default="",
         help=(
-            "Target hand sign to detect, for example: Open palm, Fist, "
+            "Target hand sign to detect, for example: Number 5 (Open palm), Fist, "
             "Thumbs up, OK, Number 1, Number 2, Number 3, Number 4."
         ),
     )
