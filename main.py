@@ -1,3 +1,55 @@
+import os
+import subprocess
+import sys
+
+def handle_non_ascii_path():
+    """
+    Bypass MediaPipe path encoding bug on Windows when directory contains non-ASCII characters.
+    It maps the project directory to a virtual drive (e.g., Z:) and re-runs the process.
+    """
+    if sys.platform != "win32":
+        return
+
+    project_root = os.path.abspath(os.path.dirname(__file__))
+    if any(ord(c) > 127 for c in project_root):
+        # Find a free drive letter in reverse order (Z: down to D:)
+        import string
+        drive = None
+        for letter in string.ascii_uppercase[::-1]:
+            candidate = f"{letter}:"
+            if not os.path.exists(candidate + "\\"):
+                drive = candidate
+                break
+
+        if not drive:
+            print("Error: No free drive letter found to bypass MediaPipe path bug.")
+            sys.exit(1)
+
+        # Map the drive
+        subprocess.run(["subst", drive, project_root], shell=True, stdout=subprocess.DEVNULL)
+
+        # Build paths on the virtual drive
+        relative_script = os.path.relpath(os.path.abspath(__file__), project_root)
+        virtual_script = os.path.join(drive, relative_script)
+        virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
+
+        if not os.path.exists(virtual_python):
+            virtual_python = sys.executable.replace(project_root, drive)
+
+        # Spawn the child process on the virtual drive
+        args = [virtual_python, virtual_script] + sys.argv[1:]
+        try:
+            result = subprocess.run(args)
+            returncode = result.returncode
+        finally:
+            # Ensure drive mapping is removed under all circumstances
+            subprocess.run(["subst", drive, "/d"], shell=True, stdout=subprocess.DEVNULL)
+
+        sys.exit(returncode)
+
+# Run the bypass check immediately on startup before importing mediapipe/cv2
+handle_non_ascii_path()
+
 import argparse
 import json
 import time
