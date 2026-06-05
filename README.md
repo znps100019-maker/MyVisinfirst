@@ -1,138 +1,118 @@
 # MyVisinfirst
 
-Arm movement detection project using OpenCV, MediaPipe, PyAutoGUI, and NumPy.
-The current focus is hand-joint image recognition: MediaPipe detects 21 hand
-landmarks, the program classifies simple static signs, and you can choose a
-target sign to detect during your project demo.
+這是一個基於 OpenCV、MediaPipe 與 NumPy 實作的**手部動作與手勢偵測專案**。
+本專案已完成精簡化整理，專注於手勢偵測，並支援直接執行 Python 檔案啟動。
 
-## Structure
+## 目錄結構說明
 
-- `main.py` - starts the camera loop and triggers keyboard input.
-- `arm_detector.py` - detects arm landmarks and calculates the elbow angle.
-- `hand_detector.py` - detects MediaPipe hand joints and classifies simple static signs.
-- `tests/` - folder containing camera testing and MediaPipe task scripts.
-  - `test_camera_scan.py` - utility to scan for available webcam index numbers.
-  - `test_camera_mesh.py` - real-time visualization of hand joint skeletons and mesh lines.
-  - `mediapipe_hand_landmarks_v2.py` - new hand tracking using MediaPipe Tasks v2 HandLandmarker.
-- `requirements.txt` - runtime dependencies.
-- `scripts/check_syntax.ps1` - verifies Python syntax.
-- `scripts/run_vision.ps1` - starts the camera app through an English drive path.
-- `scripts/pr_after_check.ps1` - runs syntax checks, then opens a draft PR.
-- `.github/workflows/syntax-check.yml` - GitHub Actions syntax check for pushes and PRs.
+- `main.py` - 主程式：啟動相機迴圈，進行實時手勢辨識與關節點繪製。
+- `hand_detector.py` - 手勢辨識模組：負責 MediaPipe 手部關節偵測與靜態手勢分類演算法。
+- `requirements.txt` - 套件依賴清單。
+- `tools/` - 專案工具目錄：
+  - `mingit-2.54.0/` - 專案內置的 Windows 免安裝可攜式 Git 環境。
 
-## Setup
+---
 
-This project expects Python 3.10.
+## 環境安裝與設定
 
-This workspace has been prepared with:
+本專案預設使用 **Python 3.10** 環境。
 
-- `.python310\python.exe` - local Python 3.10.11 installation.
-- `.venv\Scripts\python.exe` - project virtual environment.
+1. **載入專案內置工具路徑（PowerShell 視窗）**：
+   在執行任何 Git 或 Python 指令前，若您的系統沒有全域安裝 Git，可載入專案內置環境：
+   ```powershell
+   # 載入內置環境路徑（這會將專案內的 Python 與 Git 加入目前工作階段的環境變數）
+   $env:Path = "$PWD\.venv\Scripts;$PWD\tools\mingit-2.54.0\cmd;$env:Path"
+   ```
 
-Use the existing environment:
+2. **驗證環境是否準備就緒**：
+   ```powershell
+   python --version
+   git --version
+   ```
 
-```powershell
-.\.venv\Scripts\python.exe --version
-.\.venv\Scripts\python.exe -m pip check
-```
+---
 
-If you need to recreate it:
+## 執行方式
+
+您可以直接使用 Python 來執行主程式，不需要透過複雜的啟動腳本：
 
 ```powershell
-.\.python310\python.exe -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# 直接啟動主程式（開啟影像視窗與相機）
+python main.py
 ```
 
-If Python 3.10 is already installed globally, you can use that instead:
+### 💡 實用啟動引數參數 (Arguments)
 
-```powershell
-py -3.10 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
+您可以在執行 `main.py` 時附加參數來控制不同的功能：
 
-To use the virtual environment in the current PowerShell session:
+1. **選擇指定的相機鏡頭（預設為 0）**：
+   ```powershell
+   python main.py --camera 1
+   ```
 
-```powershell
-. .\scripts\use_local_tools.ps1
-```
+2. **設定相機解析度（適合效能較低或特定開發板）**：
+   ```powershell
+   python main.py --width 640 --height 480
+   ```
 
-## Run
+3. **無畫面模式（Headless）與輸出關節 JSON 數據**：
+   如果您想在背景執行，將偵測到的手部 21 個關節點與穩定手勢輸出給其他程式或終端機讀取：
+   ```powershell
+   python main.py --headless --print-joints --print-interval 0.5
+   ```
+   *輸出範例（JSON 格式）：*
+   ```json
+   {
+     "timestamp": 1780641234.56,
+     "stable_sign": "Thumbs up",
+     "stable": {"sign": "Thumbs up", "is_stable": true, "confidence": 1.0},
+     "target_sign": "",
+     "target_detected": false,
+     "hands": [
+       {
+         "handedness": "Right",
+         "sign": "Thumbs up",
+         "fingers": {"thumb": true, "index": false, "middle": false, "ring": false, "pinky": false},
+         "joints": {
+           "wrist": {"x": 320, "y": 240, "z": 0.0},
+           "thumb_tip": {"x": 350, "y": 120, "z": -0.05}
+           ...
+         }
+       }
+     ]
+   }
+   ```
 
-```powershell
-.\scripts\run_vision.ps1
-```
+4. **指定目標手勢判定（Target Sign）**：
+   當辨識到特定手勢且達到穩定影格數時，觸發目標事件輸出：
+   ```powershell
+   python main.py --target-sign "Fist"
+   ```
+   *目標命中輸出：*
+   ```json
+   {"event": "target_detected", "timestamp": 1780641250.12, "target_sign": "Fist", "stable": {"sign": "Fist", "is_stable": true, "confidence": 1.0}}
+   ```
 
-The run script maps this project to a temporary `M:` drive before starting
-Python. This avoids a MediaPipe model-loading issue when the project path
-contains non-English characters.
+---
 
-For board-style testing without a display window:
+## 目前支援的手勢辨識種類
 
-```powershell
-.\scripts\run_vision.ps1 --headless --disable-keyboard --print-joints
-```
+本系統採用 rule-based（規則式）手指伸展狀態判定，目前可精準辨識以下手勢：
 
-To detect a specific target sign:
+*   `Open palm` (開掌)
+*   `Fist` (握拳)
+*   `Thumbs up` (大拇指比讚)
+*   `OK` (OK 手勢)
+*   `Number 1` (比 1)
+*   `Number 2` (比 2)
+*   `Number 3` (比 3)
+*   `Number 4` (比 4)
+*   `I love you` (我愛你手勢)
+*   `Pinky` (比小指)
+*   `Unknown` (未知手勢)
 
-```powershell
-.\scripts\run_vision.ps1 --target-sign "Fist"
-.\scripts\run_vision.ps1 --target-sign "OK"
-.\scripts\run_vision.ps1 --target-sign "Number 1"
-```
+---
 
-When the target is stable for several frames, the program prints a JSON event:
+## 結束程式
 
-```json
-{"event":"target_detected","target_sign":"Fist"}
-```
-
-To find the working camera index:
-
-```powershell
-.\.venv\Scripts\python.exe tests/test_camera_scan.py
-```
-
-To preview the hand mesh only:
-
-```powershell
-.\scripts\run_test.ps1
-```
-
-Useful options:
-
-- `--camera 0` - choose the camera index.
-- `--width 640 --height 480` - request a smaller camera frame for slower boards.
-- `--headless` - run without `cv2.imshow`.
-- `--disable-keyboard` - skip PyAutoGUI key presses.
-- `--print-joints` - print detected arm and hand joints as JSON lines.
-- `--max-frames 60` - stop automatically after a fixed number of frames.
-- `--target-sign "Fist"` - mark a specific hand sign as the detection target.
-- `--target-cooldown 1.0` - delay repeated target events.
-
-## Current Sign Recognition
-
-The first version uses MediaPipe Hands landmarks and rule-based finger states.
-It currently recognizes:
-
-- `Open palm`
-- `Fist`
-- `Thumbs up`
-- `OK`
-- `Number 1`
-- `Number 2`
-- `Number 3`
-- `Number 4`
-- `I love you`
-- `Pinky`
-- `Unknown`
-
-This is a starter recognizer for static hand shapes. Full sign language
-recognition should add trained examples, motion history, and sign-specific
-labels.
-
-## Check And PR
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\check_syntax.ps1
-.\scripts\pr_after_check.ps1 -Title "Describe the change"
-```
+在影像視窗顯示狀態下，點擊該視窗並按下鍵盤的 **`q` 鍵**，即可安全釋放鏡頭資源並關閉視窗。
