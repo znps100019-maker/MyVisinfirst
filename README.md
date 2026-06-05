@@ -10,6 +10,10 @@ target sign to detect during your project demo.
 - `main.py` - starts the camera loop and triggers keyboard input.
 - `arm_detector.py` - detects arm landmarks and calculates the elbow angle.
 - `hand_detector.py` - detects MediaPipe hand joints and classifies simple static signs.
+- `tests/` - folder containing camera testing and MediaPipe task scripts.
+  - `test_camera_scan.py` - utility to scan for available webcam index numbers.
+  - `test_camera_mesh.py` - real-time visualization of hand joint skeletons and mesh lines.
+  - `mediapipe_hand_landmarks_v2.py` - new hand tracking using MediaPipe Tasks v2 HandLandmarker.
 - `requirements.txt` - runtime dependencies.
 - `scripts/check_syntax.ps1` - verifies Python syntax.
 - `scripts/run_vision.ps1` - starts the camera app through an English drive path.
@@ -85,7 +89,7 @@ When the target is stable for several frames, the program prints a JSON event:
 To find the working camera index:
 
 ```powershell
-.\.venv\Scripts\python.exe test.py
+.\.venv\Scripts\python.exe tests/test_camera_scan.py
 ```
 
 To preview the hand mesh only:

@@ -15,9 +15,9 @@ for filename in (
     "main.py",
     "arm_detector.py",
     "hand_detector.py",
-    "test.py",
-    "test_camera_mesh.py",
-    "mediapipe_hand_landmarks_01.py",
+    "tests/test_camera_scan.py",
+    "tests/test_camera_mesh.py",
+    "tests/mediapipe_hand_landmarks_v2.py",
 ):
     source = Path(filename).read_text(encoding="utf-8")
     ast.parse(source, filename=filename)

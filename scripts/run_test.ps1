@@ -10,7 +10,7 @@ foreach ($candidate in @("M:", "N:", "O:", "P:", "Q:", "R:", "S:", "T:")) {
         break
     }
 
-    if (Test-Path (Join-Path $candidateRoot "test_camera_mesh.py")) {
+    if (Test-Path (Join-Path $candidateRoot "tests\test_camera_mesh.py")) {
         $driveLetter = $candidate
         break
     }
@@ -24,11 +24,11 @@ $mappedRoot = "$driveLetter\"
 
 if (-not (Test-Path $mappedRoot)) {
     cmd /c "subst $driveLetter `"$projectRoot`""
-} elseif (-not (Test-Path (Join-Path $mappedRoot "test_camera_mesh.py"))) {
+} elseif (-not (Test-Path (Join-Path $mappedRoot "tests\test_camera_mesh.py"))) {
     throw "$driveLetter is already in use. Change the drive letter in scripts\run_test.ps1."
 }
 
 $python = Join-Path $mappedRoot ".venv\Scripts\python.exe"
-$main = Join-Path $mappedRoot "test_camera_mesh.py"
+$main = Join-Path $mappedRoot "tests\test_camera_mesh.py"
 
 & $python $main @args
