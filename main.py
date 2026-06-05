@@ -166,6 +166,9 @@ def main():
                 print("Cannot read frame from camera.")
                 break
 
+            # 水平翻轉影像（鏡像效果），讓操作更直覺符合鏡面反射
+            img = cv2.flip(img, 1)
+
             frame_count += 1
 
             # MediaPipe 偵測：hand_detections 是手部關節與手勢資料。
