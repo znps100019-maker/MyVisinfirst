@@ -296,26 +296,33 @@ class HandSignRecognizer:
         ring = fingers["ring"]
         pinky = fingers["pinky"]
 
+        # OK 手勢優先判定
         if self._is_ok_sign(landmarks) and middle and ring and pinky:
             return "OK"
+
+        # 特殊手勢（我愛你、比讚、小指）
+        if thumb and index and pinky and not middle and not ring:
+            return "I love you"
+        if thumb and not any([index, middle, ring, pinky]):
+            return "Thumbs up"
+        if pinky and not any([thumb, index, middle, ring]):
+            return "Pinky"
+
+        # 基礎狀態（開掌、握拳）
         if all(fingers.values()):
             return "Open palm"
         if not any(fingers.values()):
             return "Fist"
-        if thumb and not any([index, middle, ring, pinky]):
-            return "Thumbs up"
-        if index and middle and not any([thumb, ring, pinky]):
-            return "Number 2"
-        if index and middle and ring and not any([thumb, pinky]):
-            return "Number 3"
+
+        # 數字手勢（1、2、3 忽略大拇指狀態以大幅提升容錯與精確度）
         if index and middle and ring and pinky and not thumb:
             return "Number 4"
-        if index and not any([thumb, middle, ring, pinky]):
+        if index and middle and ring and not pinky:
+            return "Number 3"
+        if index and middle and not ring and not pinky:
+            return "Number 2"
+        if index and not middle and not ring and not pinky:
             return "Number 1"
-        if thumb and index and pinky and not middle and not ring:
-            return "I love you"
-        if pinky and not any([thumb, index, middle, ring]):
-            return "Pinky"
 
         return "Unknown"
 
