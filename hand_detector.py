@@ -254,13 +254,14 @@ class HandSignRecognizer:
     def _extended_fingers(self, landmarks, handedness):
         points = landmarks.landmark
         fingers = {}
+        wrist = points[0]
 
         for finger, tip_id in self.FINGER_TIPS.items():
             if finger == "thumb":
                 fingers[finger] = self._is_thumb_extended(points, handedness)
                 continue
 
-            # 其他四隻手指：利用 MCP(根部) 到 TIP(指尖) 的直線長度與分段長度總和比例判定
+            # 其他四隻手指：使用雙重保險判定（直線比例 + 手腕距離比例）
             base_idx = self.FINGER_MCPS[finger]
             mcp = points[base_idx]
             pip = points[base_idx + 1]  # PIP
@@ -273,8 +274,15 @@ class HandSignRecognizer:
                 + self._distance(pip, dip)
                 + self._distance(dip, tip)
             )
-            # 3D 空間直線距離與各分段長度之和的比例大於 0.82 視為伸直
-            fingers[finger] = (straight / max(segments, 0.001)) > 0.82
+            # 1. 3D 直線距離與分段總和比例大於 0.82
+            is_straight = (straight / max(segments, 0.001)) > 0.82
+            
+            # 2. 指尖到手腕的距離必須大於 PIP 關節到手腕的距離（加上 1.1 倍安全係數，防止收拳/遮擋誤判）
+            d_wrist_tip = self._distance(wrist, tip)
+            d_wrist_pip = self._distance(wrist, pip)
+            is_extended_from_wrist = d_wrist_tip > (d_wrist_pip * 1.1)
+
+            fingers[finger] = is_straight and is_extended_from_wrist
 
         return fingers
 
