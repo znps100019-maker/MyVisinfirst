@@ -288,6 +288,18 @@ class HandSignRecognizer:
         )
         return (straight / max(segments, 0.001)) > 0.86
 
+    def _thumb_spread_ratio(self, landmarks):
+        # 計算大拇指指尖與食指根部的空間距離，並相對於手掌大小進行標準化
+        points = landmarks.landmark
+        thumb_tip = points[self.FINGER_TIPS["thumb"]]
+        index_mcp = points[self.FINGER_MCPS["index"]]
+        wrist = points[0]
+        middle_mcp = points[self.FINGER_MCPS["middle"]]
+        
+        distance = self._distance(thumb_tip, index_mcp)
+        palm_size = max(self._distance(wrist, middle_mcp), 0.001)
+        return distance / palm_size
+
     def _classify_sign(self, fingers, landmarks):
         # 這裡是規則式手勢分類：依照哪幾根手指伸直來決定手勢。
         thumb = fingers["thumb"]
@@ -300,29 +312,42 @@ class HandSignRecognizer:
         if self._is_ok_sign(landmarks) and middle and ring and pinky:
             return "OK"
 
-        # 特殊手勢（我愛你、比讚、小指）
+        # 特殊手勢（我愛你、小指）
         if thumb and index and pinky and not middle and not ring:
             return "I love you"
-        if thumb and not any([index, middle, ring, pinky]):
-            return "Thumbs up"
         if pinky and not any([thumb, index, middle, ring]):
             return "Pinky"
 
-        # 基礎狀態（開掌、握拳）
-        if all(fingers.values()):
-            return "Open palm"
+        # 基礎狀態（握拳）
         if not any(fingers.values()):
             return "Fist"
 
-        # 數字手勢（1、2、3 忽略大拇指狀態以大幅提升容錯與精確度）
-        if index and middle and ring and pinky and not thumb:
-            return "Number 4"
-        if index and middle and ring and not pinky:
-            return "Number 3"
-        if index and middle and not ring and not pinky:
-            return "Number 2"
-        if index and not middle and not ring and not pinky:
-            return "Number 1"
+        # 透過大拇指張開幅度（與食指根部的距離比例）來精準區分 1-4 與 5-9
+        spread_ratio = self._thumb_spread_ratio(landmarks)
+        is_thumb_spread = spread_ratio > 0.52
+
+        if not is_thumb_spread:
+            # 大拇指收起/貼近手掌：判定 1-4 與 拳頭
+            if index and middle and ring and pinky:
+                return "Number 4"
+            if index and middle and ring and not pinky:
+                return "Number 3"
+            if index and middle and not ring and not pinky:
+                return "Number 2"
+            if index and not middle and not ring and not pinky:
+                return "Number 1"
+        else:
+            # 大拇指張開：判定 5-9
+            if index and middle and ring and pinky:
+                return "Number 9 (Open palm)"
+            if index and middle and ring and not pinky:
+                return "Number 8"
+            if index and middle and not ring and not pinky:
+                return "Number 7"
+            if index and not middle and not ring and not pinky:
+                return "Number 6"
+            if not any([index, middle, ring, pinky]):
+                return "Number 5 (Thumbs up)"
 
         return "Unknown"
 
