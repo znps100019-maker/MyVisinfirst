@@ -233,7 +233,11 @@ def main():
                 sign_recognizer.draw(img, hand_detections, target_sign, face_expression)
 
                 cv2.imshow("Hand Control - Main", img)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+                # 判斷如果使用者點擊視窗右上角的「X」關閉按鈕，也安全退出迴圈釋放相機
+                if cv2.getWindowProperty("Hand Control - Main", cv2.WND_PROP_VISIBLE) < 1:
                     break
 
             # 自動測試用：跑到指定幀數就結束，避免測試時程式一直開著。
