@@ -154,6 +154,7 @@ def main():
     last_print_time = 0
     last_target_time = 0
     frame_count = 0
+    show_face_mesh = True
 
     cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
     configure_camera(cap, args)
@@ -166,7 +167,10 @@ def main():
             face_recognizer.close()
         return
 
-    print("Vision system started. Press q to quit.")
+    print("Vision system started.")
+    print("Keyboard Hotkeys:")
+    print("  - Press 'q' to quit.")
+    print("  - Press 'f' to toggle face mesh blue lines show/hide.")
     if target_sign:
         print(f"Target sign: {target_sign}")
 
@@ -227,7 +231,7 @@ def main():
 
             # 非 headless 模式會開視窗，把骨架、手勢文字、目標狀態畫在畫面上。
             if not args.headless:
-                if face_recognizer and face_data:
+                if face_recognizer and face_data and show_face_mesh:
                     face_recognizer.draw(img, face_data)
                 
                 sign_recognizer.draw(img, hand_detections, target_sign, face_expression)
@@ -236,6 +240,9 @@ def main():
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
                     break
+                elif key == ord("f"):
+                    show_face_mesh = not show_face_mesh
+                
                 # 判斷如果使用者點擊視窗右上角的「X」關閉按鈕，也安全退出迴圈釋放相機
                 if cv2.getWindowProperty("Hand Control - Main", cv2.WND_PROP_VISIBLE) < 1:
                     break
