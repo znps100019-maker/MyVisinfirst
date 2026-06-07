@@ -73,6 +73,11 @@ class HandSignRecognizer:
         "Number 7",
         "Number 8",
         "Number 9",
+        "Number 6 (Two hands)",
+        "Number 7 (Two hands)",
+        "Number 8 (Two hands)",
+        "Number 9 (Two hands)",
+        "Number 10 (Two hands)",
         "I love you",
         "Pinky",
         "Unknown",
@@ -88,6 +93,7 @@ class HandSignRecognizer:
         "7": "Number 7",
         "8": "Number 8",
         "9": "Number 9",
+        "10": "Number 10 (Two hands)",
         "point": "Number 1",
         "point / 1": "Number 1",
         "v": "Number 2",
@@ -145,7 +151,15 @@ class HandSignRecognizer:
                 }
             )
 
-        if detections:
+        if len(detections) >= 2:
+            # 雙手手勢判定（前兩隻手合計）
+            total_extended = sum(detections[0]["fingers"].values()) + sum(detections[1]["fingers"].values())
+            if 6 <= total_extended <= 10:
+                two_hand_sign = f"Number {total_extended} (Two hands)"
+            else:
+                two_hand_sign = f"Two hands ({total_extended} fingers)"
+            self.history.append(two_hand_sign)
+        elif len(detections) == 1:
             self.history.append(detections[0]["sign"])
 
         return detections
@@ -255,11 +269,16 @@ class HandSignRecognizer:
         # 只有「穩定手勢」等於目標手勢時才算命中，避免單幀誤判。
         target_sign = self.normalize_sign(target_sign)
         stable = self.stable_status
-        return (
-            bool(target_sign)
-            and stable["is_stable"]
-            and self.normalize_sign(stable["sign"]) == target_sign
-        )
+        if not target_sign or not stable["is_stable"]:
+            return False
+
+        stable_sign = self.normalize_sign(stable["sign"])
+        if stable_sign == target_sign:
+            return True
+        # 支援單/雙手相容判定，例如目標設定 "Number 7"，若偵測到 "Number 7 (Two hands)" 也算命中
+        if target_sign + " (Two hands)" == stable_sign:
+            return True
+        return False
 
     def _extended_fingers(self, landmarks, handedness):
         points = landmarks.landmark
