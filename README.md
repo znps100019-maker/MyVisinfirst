@@ -66,6 +66,7 @@ python main.py
      "timestamp": 1780641234.56,
      "stable_sign": "Thumbs up",
      "stable": {"sign": "Thumbs up", "is_stable": true, "confidence": 1.0},
+     "face_expression": "Smiling",
      "target_sign": "",
      "target_detected": false,
      "hands": [
@@ -91,6 +92,12 @@ python main.py
    *目標命中輸出：*
    ```json
    {"event": "target_detected", "timestamp": 1780641250.12, "target_sign": "Fist", "stable": {"sign": "Fist", "is_stable": true, "confidence": 1.0}}
+   ```
+
+5. **關閉臉部表情偵測（--no-face）**：
+   如果您只想單獨執行手勢辨識以節省系統 CPU 運算資源，可以加入此參數關閉臉部表情偵測：
+   ```powershell
+   python main.py --no-face
    ```
 
 ---
@@ -124,6 +131,15 @@ python main.py
 *   `Number 9 (Two hands)` (雙手伸直手指總數為 9，例如：5 指 + 4 指)
 *   `Number 10 (Two hands)` (雙手伸直手指總數為 10，即雙手五指全開)
 *   *備註：若雙手手指總數小於 6，將會顯示 `"Two hands (X fingers)"`。*
+
+### 3. 臉部表情辨識 (Facial Expression)
+系統支援偵測以下臉部特徵與表情狀態：
+*   `Neutral` (無表情 / 正常狀態)
+*   `Smiling` (微笑)
+*   `Mouth Open` (張開嘴巴 / 驚訝)
+*   `Blink` (雙眼閉合 / 眨眼)
+*   `Wink Left` (眨左眼：左眼閉合，右眼張開)
+*   `Wink Right` (眨右眼：右眼閉合，左眼張開)
 
 ---
 

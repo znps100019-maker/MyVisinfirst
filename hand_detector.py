@@ -164,8 +164,8 @@ class HandSignRecognizer:
 
         return detections
 
-    def draw(self, frame, detections, target_sign=None):
-        """Draw hand skeletons and sign labels on a video frame."""
+    def draw(self, frame, detections, target_sign=None, face_expression=None):
+        """Draw hand skeletons, sign labels, and face expression info on a video frame."""
         for detection in detections:
             # 畫出 MediaPipe 手部骨架線與 21 個關節點。
             mp_drawing.draw_landmarks(
@@ -189,32 +189,33 @@ class HandSignRecognizer:
         stable = self.stable_status
         stable_sign = stable["sign"]
         
-        # 只有在偵測到手勢（非 No hand）時，才顯示精簡的提示框，避免遮擋鏡頭
-        if stable_sign != "No hand":
-            # 依據是否有目標手勢，動態決定黑框高度
-            box_bottom = 85 if target_sign else 55
-            cv2.rectangle(frame, (10, 10), (325, box_bottom), (0, 0, 0), cv2.FILLED)
-            
-            cv2.putText(
-                frame,
-                f"SIGN: {stable_sign} ({stable['confidence']:.0%})",
-                (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 255),
-                2,
-            )
+        # 只要有手勢或臉部表情，就顯示提示框
+        show_box = (stable_sign != "No hand") or (face_expression is not None)
+        
+        if show_box:
+            rows = []
+            if stable_sign != "No hand":
+                rows.append(("SIGN", f"SIGN: {stable_sign} ({stable['confidence']:.0%})", (0, 255, 255)))
+            if face_expression:
+                rows.append(("FACE", f"FACE: {face_expression}", (255, 200, 0))) # Cyan/teal color in BGR
             if target_sign:
                 target_sign = self.normalize_sign(target_sign)
                 detected = self.is_target_detected(target_sign)
                 color = (0, 255, 0) if detected else (180, 180, 180)
                 text = "TARGET HIT" if detected else "TARGET WAIT"
+                rows.append(("TARGET", f"{text}: {target_sign}", color))
+                
+            box_height = 20 + len(rows) * 30
+            cv2.rectangle(frame, (10, 10), (340, 10 + box_height), (0, 0, 0), cv2.FILLED)
+            
+            for i, (row_type, text, color) in enumerate(rows):
+                y_pos = 40 + i * 30
                 cv2.putText(
                     frame,
-                    f"{text}: {target_sign}",
-                    (20, 72),
+                    text,
+                    (20, y_pos),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
+                    0.65 if row_type == "TARGET" else 0.7,
                     color,
                     2,
                 )

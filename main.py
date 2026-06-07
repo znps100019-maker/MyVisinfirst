@@ -57,6 +57,7 @@ import time
 import cv2
 
 from hand_detector import HandSignRecognizer
+from face_detector import FaceExpressionRecognizer
 
 
 def build_args():
@@ -97,10 +98,15 @@ def build_args():
         default=1.0,
         help="Seconds between repeated target-detected events.",
     )
+    parser.add_argument(
+        "--no-face",
+        action="store_true",
+        help="Disable facial expression detection.",
+    )
     return parser.parse_args()
 
 
-def build_joint_payload(hand_detections, stable_status, target_sign):
+def build_joint_payload(hand_detections, stable_status, target_sign, face_expression=None):
     # 組成 JSON 資料，方便輸出給終端機、開發板或其他程式讀取。
     hands = []
     for detection in hand_detections:
@@ -117,6 +123,7 @@ def build_joint_payload(hand_detections, stable_status, target_sign):
         "timestamp": round(time.time(), 3),
         "stable_sign": stable_status["sign"],
         "stable": stable_status,
+        "face_expression": face_expression,
         "target_sign": target_sign,
         "target_detected": (
             bool(target_sign)
@@ -140,6 +147,9 @@ def main():
 
     # HandSignRecognizer 負責手部 21 個關節與手勢。
     sign_recognizer = HandSignRecognizer()
+    # FaceExpressionRecognizer 負責臉部網格與表情。
+    face_recognizer = None if args.no_face else FaceExpressionRecognizer()
+    
     target_sign = sign_recognizer.normalize_sign(args.target_sign)
     last_print_time = 0
     last_target_time = 0
@@ -152,6 +162,8 @@ def main():
     if not cap.isOpened():
         print("Cannot open camera. Check camera permission or camera index.")
         sign_recognizer.close()
+        if face_recognizer:
+            face_recognizer.close()
         return
 
     print("Vision system started. Press q to quit.")
@@ -174,6 +186,14 @@ def main():
             # MediaPipe 偵測：hand_detections 是手部關節與手勢資料。
             hand_detections = sign_recognizer.process(img)
             stable_status = sign_recognizer.stable_status
+
+            # 臉部表情偵測
+            face_data = None
+            face_expression = None
+            if face_recognizer:
+                face_data = face_recognizer.process(img)
+                if face_data:
+                    face_expression = face_data["expression"]
 
             # 如果使用者指定 --target-sign，穩定偵測到目標手勢時輸出事件。
             if target_sign and sign_recognizer.is_target_detected(target_sign):
@@ -200,13 +220,17 @@ def main():
                         hand_detections,
                         stable_status,
                         target_sign,
+                        face_expression,
                     )
                     print(json.dumps(payload, ensure_ascii=False))
                     last_print_time = now
 
             # 非 headless 模式會開視窗，把骨架、手勢文字、目標狀態畫在畫面上。
             if not args.headless:
-                sign_recognizer.draw(img, hand_detections, target_sign)
+                if face_recognizer and face_data:
+                    face_recognizer.draw(img, face_data)
+                
+                sign_recognizer.draw(img, hand_detections, target_sign, face_expression)
 
                 cv2.imshow("Hand Control - Main", img)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -219,6 +243,8 @@ def main():
     finally:
         cap.release()
         sign_recognizer.close()
+        if face_recognizer:
+            face_recognizer.close()
         if not args.headless:
             cv2.destroyAllWindows()
 
