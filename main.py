@@ -171,6 +171,7 @@ def main():
     print("Keyboard Hotkeys:")
     print("  - Press 'q' to quit.")
     print("  - Press 'f' to toggle face mesh blue lines show/hide.")
+    print("  - Press 'c' to clear current sign language sentence.")
     if target_sign:
         print(f"Target sign: {target_sign}")
 
