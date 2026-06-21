@@ -184,78 +184,88 @@ class HandSignRecognizer:
 
     def draw(self, frame, detections, target_sign=None, face_expression=None):
         """Draw hand skeletons, sign labels, and face expression info on a video frame."""
+        self._draw_hands(frame, detections)
+        self._draw_hud(frame, target_sign, face_expression)
+        self._draw_sentence(frame)
+
+    def _draw_hands(self, frame, detections):
         for detection in detections:
             mp_drawing.draw_landmarks(
                 frame,
                 detection["landmarks"],
                 mp_hands.HAND_CONNECTIONS,
             )
-
             x, y = self._label_position(frame, detection["landmarks"])
             label = f'{detection["handedness"]}: {display_label(detection["sign"])}'
             self._draw_text(frame, label, (x, y), 22, (255, 255, 0))
 
+    def _draw_hud(self, frame, target_sign, face_expression):
         stable = self.stable_status
         stable_sign = stable["sign"]
         show_box = stable_sign != "No hand" or face_expression is not None
 
-        if show_box:
-            rows = []
-            if stable_sign != "No hand":
-                rows.append(
-                    {
-                        "text": f"手語: {display_label(stable_sign)}  {stable['confidence']:.0%}",
-                        "color": (0, 255, 255),
-                        "font_size": 24,
-                    }
+        if not show_box:
+            return
+
+        rows = []
+        if stable_sign != "No hand":
+            rows.append(
+                {
+                    "text": f"手語: {display_label(stable_sign)}  {stable['confidence']:.0%}",
+                    "color": (0, 255, 255),
+                    "font_size": 24,
+                }
+            )
+        if face_expression:
+            rows.append(
+                {
+                    "text": f"表情: {face_expression}",
+                    "color": (255, 200, 0),
+                    "font_size": 22,
+                }
+            )
+        if target_sign:
+            target_sign = self.normalize_sign(target_sign)
+            detected = self.is_target_detected(target_sign)
+            color = (0, 255, 0) if detected else (180, 180, 180)
+            text = "目標完成" if detected else "等待目標"
+            rows.append(
+                {
+                    "text": f"{text}: {display_label(target_sign)}",
+                    "color": color,
+                    "font_size": 22,
+                }
+            )
+
+        if draw_panel:
+            draw_panel(frame, rows, width=460)
+        else:
+            box_height = 20 + len(rows) * 30
+            cv2.rectangle(frame, (10, 10), (460, 10 + box_height), (0, 0, 0), cv2.FILLED)
+            for i, row in enumerate(rows):
+                cv2.putText(
+                    frame,
+                    row["text"].encode("ascii", errors="ignore").decode("ascii"),
+                    (20, 40 + i * 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65,
+                    row["color"],
+                    2,
                 )
-            if face_expression:
-                rows.append(
-                    {
-                        "text": f"表情: {face_expression}",
-                        "color": (255, 200, 0),
-                        "font_size": 22,
-                    }
-                )
-            if target_sign:
-                target_sign = self.normalize_sign(target_sign)
-                detected = self.is_target_detected(target_sign)
-                color = (0, 255, 0) if detected else (180, 180, 180)
-                text = "目標完成" if detected else "等待目標"
-                rows.append(
-                    {
-                        "text": f"{text}: {display_label(target_sign)}",
-                        "color": color,
-                        "font_size": 22,
-                    }
-                )
 
-            if draw_panel:
-                draw_panel(frame, rows, width=460)
-            else:
-                box_height = 20 + len(rows) * 30
-                cv2.rectangle(frame, (10, 10), (460, 10 + box_height), (0, 0, 0), cv2.FILLED)
-                for i, row in enumerate(rows):
-                    cv2.putText(
-                        frame,
-                        row["text"].encode("ascii", errors="ignore").decode("ascii"),
-                        (20, 40 + i * 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.65,
-                        row["color"],
-                        2,
-                    )
+    def _draw_sentence(self, frame):
+        if not self.sentence:
+            return
 
-        if self.sentence:
-            height, width, _ = frame.shape
-            cv2.rectangle(frame, (10, height - 55), (width - 10, height - 15), (0, 0, 0), cv2.FILLED)
+        height, width, _ = frame.shape
+        cv2.rectangle(frame, (10, height - 55), (width - 10, height - 15), (0, 0, 0), cv2.FILLED)
 
-            sentence_text = " -> ".join(display_label(sign, include_english=False) for sign in self.sentence)
-            max_char_len = int(width / 12)
-            if len(sentence_text) > max_char_len:
-                sentence_text = "..." + sentence_text[-max_char_len:]
+        sentence_text = " -> ".join(display_label(sign, include_english=False) for sign in self.sentence)
+        max_char_len = int(width / 12)
+        if len(sentence_text) > max_char_len:
+            sentence_text = "..." + sentence_text[-max_char_len:]
 
-            self._draw_text(frame, f"句子: {sentence_text}", (20, height - 46), 24, (0, 255, 0))
+        self._draw_text(frame, f"句子: {sentence_text}", (20, height - 46), 24, (0, 255, 0))
 
     def close(self):
         self.hands.close()

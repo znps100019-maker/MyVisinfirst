@@ -166,6 +166,70 @@ def emit_target_event(target_sign, stable_status):
     )
 
 
+def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign):
+    last_print_time = 0
+    last_target_time = 0
+    frame_count = 0
+    show_face_mesh = True
+
+    while True:
+        success, img = cap.read()
+        if not success:
+            print("Cannot read frame from camera.")
+            break
+
+        img = cv2.flip(img, 1)
+        frame_count += 1
+
+        hand_detections = sign_recognizer.process(img)
+        stable_status = sign_recognizer.stable_status
+
+        face_data = None
+        face_expression = None
+        if face_recognizer:
+            face_data = face_recognizer.process(img)
+            if face_data:
+                face_expression = face_data["expression"]
+
+        now = time.time()
+        if target_sign and sign_recognizer.is_target_detected(target_sign):
+            if now - last_target_time >= args.target_cooldown:
+                emit_target_event(target_sign, stable_status)
+                last_target_time = now
+
+        if args.print_joints and now - last_print_time >= args.print_interval:
+            payload = build_joint_payload(
+                hand_detections,
+                stable_status,
+                target_sign,
+                face_expression,
+            )
+            print(json.dumps(payload, ensure_ascii=False))
+            last_print_time = now
+
+        if not args.headless:
+            if face_recognizer and face_data and show_face_mesh:
+                face_recognizer.draw(img, face_data)
+
+            sign_recognizer.draw(img, hand_detections, target_sign, face_expression)
+
+            cv2.imshow("Hand Control - Main", img)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
+            if key == ord("f"):
+                show_face_mesh = not show_face_mesh
+            if key == ord("c"):
+                sign_recognizer.clear_sentence()
+
+            if cv2.getWindowProperty("Hand Control - Main", cv2.WND_PROP_VISIBLE) < 1:
+                break
+
+        if args.max_frames > 0 and frame_count >= args.max_frames:
+            print(f"Reached max frames: {args.max_frames}")
+            break
+
+
 def main():
     args = build_args()
 
@@ -173,10 +237,6 @@ def main():
     face_recognizer = None if args.no_face else FaceExpressionRecognizer()
 
     target_sign = sign_recognizer.normalize_sign(args.target_sign)
-    last_print_time = 0
-    last_target_time = 0
-    frame_count = 0
-    show_face_mesh = True
 
     cap = open_camera(args)
     if not cap.isOpened():
@@ -191,62 +251,7 @@ def main():
         cv2.namedWindow("Hand Control - Main", cv2.WINDOW_NORMAL)
 
     try:
-        while True:
-            success, img = cap.read()
-            if not success:
-                print("Cannot read frame from camera.")
-                break
-
-            img = cv2.flip(img, 1)
-            frame_count += 1
-
-            hand_detections = sign_recognizer.process(img)
-            stable_status = sign_recognizer.stable_status
-
-            face_data = None
-            face_expression = None
-            if face_recognizer:
-                face_data = face_recognizer.process(img)
-                if face_data:
-                    face_expression = face_data["expression"]
-
-            now = time.time()
-            if target_sign and sign_recognizer.is_target_detected(target_sign):
-                if now - last_target_time >= args.target_cooldown:
-                    emit_target_event(target_sign, stable_status)
-                    last_target_time = now
-
-            if args.print_joints and now - last_print_time >= args.print_interval:
-                payload = build_joint_payload(
-                    hand_detections,
-                    stable_status,
-                    target_sign,
-                    face_expression,
-                )
-                print(json.dumps(payload, ensure_ascii=False))
-                last_print_time = now
-
-            if not args.headless:
-                if face_recognizer and face_data and show_face_mesh:
-                    face_recognizer.draw(img, face_data)
-
-                sign_recognizer.draw(img, hand_detections, target_sign, face_expression)
-
-                cv2.imshow("Hand Control - Main", img)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q"):
-                    break
-                if key == ord("f"):
-                    show_face_mesh = not show_face_mesh
-                if key == ord("c"):
-                    sign_recognizer.clear_sentence()
-
-                if cv2.getWindowProperty("Hand Control - Main", cv2.WND_PROP_VISIBLE) < 1:
-                    break
-
-            if args.max_frames > 0 and frame_count >= args.max_frames:
-                print(f"Reached max frames: {args.max_frames}")
-                break
+        process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
     finally:
         cap.release()
         sign_recognizer.close()
