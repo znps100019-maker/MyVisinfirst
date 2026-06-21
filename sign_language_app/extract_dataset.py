@@ -134,6 +134,8 @@ def main():
     # 將預設路徑設為與 downloader.py 下載輸出對齊的目錄
     parser.add_argument("--videos-dir", default="raw_videos", help="包含分類影片的目錄。")
     parser.add_argument("--output", default="dataset.json", help="輸出的 JSON 特徵資料庫路徑。")
+    parser.add_argument("--limit", type=int, default=0, help="限制處理的影片總數，0 代表不限制。")
+    parser.add_argument("--frame-interval", type=int, default=15, help="影格擷取間隔，預設每 15 影格擷取一次。")
     args = parser.parse_args()
     
     # 取得相對此腳本所在目錄的正確絕對路徑
@@ -160,6 +162,9 @@ def main():
     
     print(f"正在從目錄 {videos_dir} 擷取特徵...")
     
+    video_count = 0
+    limit = args.limit
+    
     for category in categories:
         cat_dir = os.path.join(videos_dir, category)
         video_files = [f for f in os.listdir(cat_dir) if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))]
@@ -170,14 +175,20 @@ def main():
         dataset[category] = []
         
         for video_file in video_files:
+            if limit > 0 and video_count >= limit:
+                break
             video_path = os.path.join(cat_dir, video_file)
             print(f"  處理影片 {video_file}... ", end="", flush=True)
             
-            features = process_video(video_path, hands_detector)
+            features = process_video(video_path, hands_detector, args.frame_interval)
             print(f"完成 (成功擷取 {len(features)} 影格)")
             
             if features:
                 dataset[category].extend(features)
+                video_count += 1
+                
+        if limit > 0 and video_count >= limit:
+            break
                 
     hands_detector.close()
     
