@@ -88,8 +88,8 @@ def build_args():
         "--target-sign",
         default="",
         help=(
-            "Target hand sign to detect, for example: Number 5 (Open palm), Fist, "
-            "Thumbs up, OK, Number 1, Number 2, Number 3, Number 4."
+            "Target hand sign to detect, for example: hello, victory, salute, "
+            "secret, gun, good, bad, cow, ok, i love you."
         ),
     )
     parser.add_argument(

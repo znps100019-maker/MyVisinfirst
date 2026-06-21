@@ -60,50 +60,59 @@ class HandSignRecognizer:
         "pinky_tip",
     ]
     AVAILABLE_SIGNS = [
-        "Open palm",
-        "Fist",
-        "Thumbs up",
-        "OK",
-        "Number 1",
-        "Number 2",
+        "Fist (Solidarity)",
+        "OK (Zero / Can)",
+        "Number 1 (Secret)",
+        "Number 2 (Victory)",
         "Number 3",
-        "Number 4",
-        "Number 5 (Open palm)",
+        "Number 4 (Salute)",
+        "Number 5 (Hello / Greet)",
         "Number 6",
-        "Number 7",
+        "Number 7 (Gun)",
         "Number 8",
         "Number 9",
+        "Good / Male (Thumbs up)",
+        "Bad / Female (Pinky)",
+        "I love you",
+        "Cow / Horns",
         "Number 6 (Two hands)",
         "Number 7 (Two hands)",
         "Number 8 (Two hands)",
         "Number 9 (Two hands)",
         "Number 10 (Two hands)",
-        "I love you",
-        "Pinky",
         "Unknown",
         "No hand",
     ]
     SIGN_ALIASES = {
-        "1": "Number 1",
-        "2": "Number 2",
+        "1": "Number 1 (Secret)",
+        "2": "Number 2 (Victory)",
         "3": "Number 3",
-        "4": "Number 4",
-        "5": "Number 5 (Open palm)",
+        "4": "Number 4 (Salute)",
+        "5": "Number 5 (Hello / Greet)",
         "6": "Number 6",
-        "7": "Number 7",
+        "7": "Number 7 (Gun)",
         "8": "Number 8",
         "9": "Number 9",
         "10": "Number 10 (Two hands)",
-        "point": "Number 1",
-        "point / 1": "Number 1",
-        "v": "Number 2",
-        "peace": "Number 2",
-        "v / peace": "Number 2",
-        "five": "Number 5 (Open palm)",
-        "open": "Number 5 (Open palm)",
-        "palm": "Number 5 (Open palm)",
-        "thumb": "Thumbs up",
-        "thumbs": "Thumbs up",
+        "secret": "Number 1 (Secret)",
+        "victory": "Number 2 (Victory)",
+        "salute": "Number 4 (Salute)",
+        "hello": "Number 5 (Hello / Greet)",
+        "greet": "Number 5 (Hello / Greet)",
+        "gun": "Number 7 (Gun)",
+        "good": "Good / Male (Thumbs up)",
+        "male": "Good / Male (Thumbs up)",
+        "bad": "Bad / Female (Pinky)",
+        "female": "Bad / Female (Pinky)",
+        "thumbs up": "Good / Male (Thumbs up)",
+        "pinky": "Bad / Female (Pinky)",
+        "cow": "Cow / Horns",
+        "horns": "Cow / Horns",
+        "i love you": "I love you",
+        "ok": "OK (Zero / Can)",
+        "zero": "OK (Zero / Can)",
+        "can": "OK (Zero / Can)",
+        "fist": "Fist (Solidarity)",
     }
 
     def __init__(self, max_num_hands=2, history_size=8, stable_min_count=5):
@@ -353,17 +362,19 @@ class HandSignRecognizer:
 
         # OK 手勢優先判定
         if self._is_ok_sign(landmarks) and middle and ring and pinky:
-            return "OK"
+            return "OK (Zero / Can)"
 
-        # 特殊手勢（我愛你、小指）
+        # 特殊手勢（我愛你、小指、牛/角）
         if thumb and index and pinky and not middle and not ring:
             return "I love you"
         if pinky and not any([thumb, index, middle, ring]):
-            return "Pinky"
+            return "Bad / Female (Pinky)"
+        if index and pinky and not thumb and not middle and not ring:
+            return "Cow / Horns"
 
         # 基礎狀態（握拳）
         if not any(fingers.values()):
-            return "Fist"
+            return "Fist (Solidarity)"
 
         # 透過大拇指張開幅度（與食指根部的距離比例）來精準區分 1-4 與 5-9
         spread_ratio = self._thumb_spread_ratio(landmarks)
@@ -372,27 +383,27 @@ class HandSignRecognizer:
         if not is_thumb_spread:
             # 大拇指收起/貼近手掌：判定 1-4 與 拳頭
             if index and middle and ring and pinky:
-                return "Number 4"
+                return "Number 4 (Salute)"
             if index and middle and ring and not pinky:
                 return "Number 3"
             if index and middle and not ring and not pinky:
-                return "Number 2"
+                return "Number 2 (Victory)"
             if index and not middle and not ring and not pinky:
-                return "Number 1"
+                return "Number 1 (Secret)"
         else:
             # 大拇指張開：判定 5-9 及 Thumbs up
             if index and middle and ring and pinky:
-                return "Number 5 (Open palm)"
+                return "Number 5 (Hello / Greet)"
             if index and middle and ring and not pinky:
                 return "Number 9"
             if index and middle and not ring and not pinky:
                 return "Number 8"
             if index and not middle and not ring and not pinky:
-                return "Number 7"
+                return "Number 7 (Gun)"
             if pinky and not index and not middle and not ring:
                 return "Number 6"
             if not any([index, middle, ring, pinky]):
-                return "Thumbs up"
+                return "Good / Male (Thumbs up)"
 
         return "Unknown"
 
