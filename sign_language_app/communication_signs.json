@@ -135,6 +135,36 @@
     "label": "taxi",
     "display": "的士 / 計程車",
     "english": "Taxi",
-    "keywords": ["taxi", "cab", "的士", "計程車"]
+    "keywords": ["taxi", "cab", "the taxi", "計程車"]
+  },
+  {
+    "label": "disability",
+    "display": "身心障礙",
+    "english": "Disability",
+    "keywords": ["身心障礙", "身障", "殘障", "disability"]
+  },
+  {
+    "label": "hearing_aid",
+    "display": "助聽器",
+    "english": "Hearing aid",
+    "keywords": ["助聽器", "hearing aid"]
+  },
+  {
+    "label": "interpreter",
+    "display": "手語翻譯",
+    "english": "Interpreter",
+    "keywords": ["手語翻譯", "翻譯", "interpreter"]
+  },
+  {
+    "label": "certificate",
+    "display": "證明 / 手冊",
+    "english": "Certificate / Handbook",
+    "keywords": ["證明", "手冊", "身障證明", "身障手冊", "certificate", "handbook"]
+  },
+  {
+    "label": "government",
+    "display": "政府",
+    "english": "Government",
+    "keywords": ["政府", "government"]
   }
 ]
