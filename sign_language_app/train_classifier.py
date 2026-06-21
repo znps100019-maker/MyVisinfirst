@@ -27,7 +27,7 @@ def main():
         "samples": []
     }
 
-    print("\n▶ 正在編譯手勢類別與計算特徵樣板...")
+    print("\n> 正在編譯手勢類別與計算特徵樣板...")
     total_samples = 0
     
     for category, vectors in dataset.items():
@@ -53,7 +53,7 @@ def main():
     with open(model_path, "w", encoding="utf-8") as f:
         json.dump(model_data, f, ensure_ascii=False, indent=2)
 
-    print(f"\n✅ KNN 模型樣板庫編譯完成！")
+    print(f"\n[OK] KNN 模型樣板庫編譯完成！")
     print(f"  儲存路徑：{model_path}")
     print(f"  總特徵樣本數：{total_samples} 筆")
     print(f"  您現在可以執行 recognizer.py 開始實時辨識！")

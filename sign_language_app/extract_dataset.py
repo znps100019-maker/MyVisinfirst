@@ -160,7 +160,7 @@ def main():
         if not video_files:
             continue
             
-        print(f"\n▶ 正在擷取手語標籤: '{category}'...")
+        print(f"\n> 正在擷取手語標籤: '{category}'...")
         dataset[category] = []
         
         for video_file in video_files:
@@ -179,7 +179,7 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f)
         
-    print(f"\n✅ 特徵資料庫編譯成功，已寫入：{output_path}")
+    print(f"\n[OK] 特徵資料庫編譯成功，已寫入：{output_path}")
     
 if __name__ == "__main__":
     main()
