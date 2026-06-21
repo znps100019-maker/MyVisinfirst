@@ -15,3 +15,11 @@ python-*.exe
 *.code-workspace
 
 tools/
+
+# Sign language app data and models
+sign_language_app/dataset.json
+sign_language_app/model.json
+sign_language_app/raw_videos/
+sign_language_app/temp_downloads/
+*.srt
+*_timeline.txt
