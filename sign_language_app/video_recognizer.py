@@ -6,6 +6,10 @@ import subprocess
 from collections import Counter, deque
 import cv2
 import numpy as np
+try:
+    from knn import classify_knn as weighted_classify_knn
+except ImportError:
+    from sign_language_app.knn import classify_knn as weighted_classify_knn
 
 def handle_non_ascii_path():
     """
@@ -109,6 +113,8 @@ def classify_knn(query_vector, samples, k=9):
     label = most_common[0]
     confidence = most_common[1] / k
     return label, confidence
+
+classify_knn = weighted_classify_knn
 
 def get_stream_url(video_input):
     """如果輸入是網路連結，使用 yt-dlp 取得直接串流 URL"""
