@@ -1,5 +1,0 @@
-yt-dlp
-numpy
-opencv-python
-mediapipe
-Pillow
