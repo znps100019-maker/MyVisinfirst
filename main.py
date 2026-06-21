@@ -189,6 +189,14 @@ def main():
             # 水平翻轉影像（鏡像效果），讓操作更直覺符合鏡面反射
             img = cv2.flip(img, 1)
 
+            # 當輸入影像寬度小於 960 時，自動等比例放大至 960 寬度，以利顯示更大的畫面與更清晰的文字
+            h, w = img.shape[:2]
+            target_width = 960
+            if w < target_width:
+                scale = target_width / w
+                target_height = int(h * scale)
+                img = cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_LINEAR)
+
             frame_count += 1
 
             # MediaPipe 偵測：hand_detections 是手部關節與手勢資料。

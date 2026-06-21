@@ -236,22 +236,22 @@ class HandSignRecognizer:
         # 繪製連貫性語句（如果語句不為空）
         if self.sentence:
             height, width, _ = frame.shape
-            # 建立底部半透明黑色橫條
-            cv2.rectangle(frame, (10, height - 55), (width - 10, height - 15), (0, 0, 0), cv2.FILLED)
+            # 建立底部半透明黑色橫條（高度增高至 60 像素，容納大字體）
+            cv2.rectangle(frame, (10, height - 75), (width - 10, height - 15), (0, 0, 0), cv2.FILLED)
             
             # 將語句串接成文字
             sentence_text = " -> ".join(self.sentence)
-            # 如果文字太長，只顯示後面的部分
-            max_char_len = int(width / 12)
+            # 如果文字太長，只顯示後面的部分（除數設為 17，防止因字體放大而在右側超出畫面裁切）
+            max_char_len = int(width / 17)
             if len(sentence_text) > max_char_len:
                 sentence_text = "..." + sentence_text[-max_char_len:]
                 
             cv2.putText(
                 frame,
                 f"SENTENCE: {sentence_text}",
-                (20, height - 28),
+                (25, height - 37),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
+                0.75, # 字體放大至 0.75，更好顯現字
                 (0, 255, 0),
                 2,
             )
