@@ -100,6 +100,11 @@ def build_args():
         action="store_true",
         help="Disable facial expression detection.",
     )
+    parser.add_argument(
+        "--video",
+        default="",
+        help="Local video path or YouTube URL to process instead of camera.",
+    )
     return parser.parse_args()
 
 
@@ -136,9 +141,26 @@ def configure_camera(cap, args):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
 
 
-def open_camera(args):
-    cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
-    configure_camera(cap, args)
+def open_video_source(args):
+    if args.video:
+        video_input = args.video
+        if video_input.startswith(("http://", "https://")):
+            import yt_dlp
+            options = {
+                "format": "worst[ext=mp4]/worst",
+                "quiet": True,
+                "no_warnings": True,
+            }
+            with yt_dlp.YoutubeDL(options) as ydl:
+                try:
+                    video_input = ydl.extract_info(video_input, download=False)["url"]
+                except Exception as exc:
+                    print(f"Cannot open YouTube video: {exc}")
+                    sys.exit(1)
+        cap = cv2.VideoCapture(video_input)
+    else:
+        cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
+        configure_camera(cap, args)
     return cap
 
 
@@ -238,9 +260,9 @@ def main():
 
     target_sign = sign_recognizer.normalize_sign(args.target_sign)
 
-    cap = open_camera(args)
+    cap = open_video_source(args)
     if not cap.isOpened():
-        print("Cannot open camera. Check camera permission or camera index.")
+        print("Cannot open camera or video file. Check permission or path.")
         sign_recognizer.close()
         if face_recognizer:
             face_recognizer.close()
