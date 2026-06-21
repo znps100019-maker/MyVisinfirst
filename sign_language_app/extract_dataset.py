@@ -89,18 +89,24 @@ def normalize_landmarks(landmarks_list):
     # 回傳 63 維特徵向量 (21 個點 * 3D 軸)
     return normalized
 
-def process_video(video_path, hands_detector):
-    """讀取影片每一影格，偵測並擷取正規化特徵"""
+def process_video(video_path, hands_detector, frame_interval=15):
+    """讀取影片影格，每隔 frame_interval 影格偵測並擷取正規化特徵以加速處理"""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return []
         
     features_list = []
+    frame_idx = 0
     
     while True:
         success, frame = cap.read()
         if not success:
             break
+            
+        if frame_idx % frame_interval != 0:
+            frame_idx += 1
+            continue
+        frame_idx += 1
             
         # 鏡像翻轉並轉為 RGB
         frame = cv2.flip(frame, 1)
