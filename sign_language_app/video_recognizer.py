@@ -73,6 +73,9 @@ def build_args():
     parser.add_argument("--history-size", type=int, default=8, help="Frames kept for stable voting.")
     parser.add_argument("--stable-count", type=int, default=5, help="Votes required before a sign is stable.")
     parser.add_argument("--min-confidence", type=float, default=0.45, help="Ignore model results below this confidence.")
+    parser.add_argument("--no-srt", action="store_true", help="Do not generate .srt subtitle file.")
+    parser.add_argument("--no-txt", action="store_true", help="Do not generate .txt timeline file.")
+    parser.add_argument("--min-duration", type=float, default=0.2, help="Minimum duration of a gesture segment in seconds.")
     return parser.parse_args()
 
 
@@ -142,6 +145,38 @@ def draw_sentence(frame, sentence):
     )
 
 
+def format_srt_time(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    milliseconds = int(round((seconds - int(seconds)) * 1000))
+    if milliseconds > 999:
+        milliseconds = 999
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
+
+
+def save_srt(segments, srt_path):
+    with open(srt_path, "w", encoding="utf-8") as f:
+        for idx, seg in enumerate(segments, 1):
+            start_str = format_srt_time(seg["start_time"])
+            end_str = format_srt_time(seg["end_time"])
+            label_text = display_label(seg["label"], include_english=False)
+            f.write(f"{idx}\n")
+            f.write(f"{start_str} --> {end_str}\n")
+            f.write(f"{label_text}\n\n")
+
+
+def save_timeline_txt(segments, txt_path):
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write("手語時間軸辨識結果\n")
+        f.write("=" * 40 + "\n")
+        for seg in segments:
+            start_str = format_srt_time(seg["start_time"])
+            end_str = format_srt_time(seg["end_time"])
+            label_text = display_label(seg["label"], include_english=False)
+            f.write(f"[{start_str} -> {end_str}] {label_text}\n")
+
+
 def main():
     args = build_args()
     samples, model_path = load_model(args.model)
@@ -151,6 +186,10 @@ def main():
     if not cap.isOpened():
         print(f"Cannot open video: {args.input}")
         sys.exit(1)
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 30.0
 
     hands_detector = mp_hands.Hands(
         static_image_mode=False,
@@ -163,6 +202,10 @@ def main():
     sentence = []
     last_added_sign = None
 
+    frame_idx = 0
+    segments = []
+    active_segment = None
+
     print(f"Loaded model: {model_path}")
     print("Press q to quit. Press c to clear the sentence.")
     cv2.namedWindow("Sign Language Video Recognizer", cv2.WINDOW_NORMAL)
@@ -172,6 +215,9 @@ def main():
             success, frame = cap.read()
             if not success:
                 break
+
+            current_time = frame_idx / fps
+            frame_idx += 1
 
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -207,6 +253,28 @@ def main():
             stable_sign, stable_confidence = stable_from_history(history, args.stable_count)
             last_added_sign = append_sentence(sentence, last_added_sign, stable_sign)
 
+            # 時間軸片段追蹤邏輯
+            current_label = None if stable_sign in ("No hand", "Unknown") else stable_sign
+            active_label = active_segment["label"] if active_segment else None
+
+            if current_label != active_label:
+                if active_segment:
+                    start_t = active_segment["start_time"]
+                    end_t = current_time
+                    if end_t - start_t >= args.min_duration:
+                        segments.append({
+                            "label": active_segment["label"],
+                            "start_time": start_t,
+                            "end_time": end_t
+                        })
+                    active_segment = None
+                
+                if current_label is not None:
+                    active_segment = {
+                        "label": current_label,
+                        "start_time": current_time
+                    }
+
             if stable_sign != "No hand":
                 draw_panel(
                     frame,
@@ -232,6 +300,17 @@ def main():
             if cv2.getWindowProperty("Sign Language Video Recognizer", cv2.WND_PROP_VISIBLE) < 1:
                 break
     finally:
+        # 影片結束時，結算最後一個手勢片段
+        if active_segment:
+            start_t = active_segment["start_time"]
+            end_t = frame_idx / fps
+            if end_t - start_t >= args.min_duration:
+                segments.append({
+                    "label": active_segment["label"],
+                    "start_time": start_t,
+                    "end_time": end_t
+                })
+
         cap.release()
         hands_detector.close()
         cv2.destroyAllWindows()
@@ -243,6 +322,36 @@ def main():
         else:
             print("No stable sign was recognized.")
         print("=" * 40)
+
+        # 輸出並儲存字幕檔與時間軸文字檔
+        if segments:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            is_url = args.input.startswith(("http://", "https://"))
+            if is_url:
+                output_dir = script_dir
+                base_name = "youtube_output"
+            else:
+                output_dir = os.path.dirname(os.path.abspath(args.input))
+                base_name = os.path.splitext(os.path.basename(args.input))[0]
+
+            print("\nTimeline result:")
+            print("-" * 40)
+            for seg in segments:
+                start_s = format_srt_time(seg["start_time"])
+                end_s = format_srt_time(seg["end_time"])
+                lbl = display_label(seg["label"], include_english=False)
+                print(f"[{start_s} -> {end_s}] {lbl}")
+            print("-" * 40)
+
+            if not args.no_srt:
+                srt_path = os.path.join(output_dir, f"{base_name}.srt")
+                save_srt(segments, srt_path)
+                print(f"Subtitles saved to: {srt_path}")
+
+            if not args.no_txt:
+                txt_path = os.path.join(output_dir, f"{base_name}_timeline.txt")
+                save_timeline_txt(segments, txt_path)
+                print(f"Timeline transcript saved to: {txt_path}")
 
 
 if __name__ == "__main__":
