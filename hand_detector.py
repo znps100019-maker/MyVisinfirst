@@ -126,6 +126,9 @@ class HandSignRecognizer:
         # history 用來保存最近幾次辨識結果，避免手勢瞬間跳動造成誤判。
         self.history = deque(maxlen=history_size)
         self.stable_min_count = stable_min_count
+        # 用於儲存連貫性語句與去重狀態
+        self.sentence = []
+        self.last_added_sign = None
 
     def process(self, frame):
         """Return detected hands with landmarks, handedness, and sign labels."""
@@ -171,6 +174,7 @@ class HandSignRecognizer:
         elif len(detections) == 1:
             self.history.append(detections[0]["sign"])
 
+        self._update_sentence()
         return detections
 
     def draw(self, frame, detections, target_sign=None, face_expression=None):
@@ -228,6 +232,29 @@ class HandSignRecognizer:
                     color,
                     2,
                 )
+
+        # 繪製連貫性語句（如果語句不為空）
+        if self.sentence:
+            height, width, _ = frame.shape
+            # 建立底部半透明黑色橫條
+            cv2.rectangle(frame, (10, height - 55), (width - 10, height - 15), (0, 0, 0), cv2.FILLED)
+            
+            # 將語句串接成文字
+            sentence_text = " -> ".join(self.sentence)
+            # 如果文字太長，只顯示後面的部分
+            max_char_len = int(width / 12)
+            if len(sentence_text) > max_char_len:
+                sentence_text = "..." + sentence_text[-max_char_len:]
+                
+            cv2.putText(
+                frame,
+                f"SENTENCE: {sentence_text}",
+                (20, height - 28),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 0),
+                2,
+            )
 
     def close(self):
         self.hands.close()
@@ -289,6 +316,20 @@ class HandSignRecognizer:
         if target_sign + " (Two hands)" == stable_sign:
             return True
         return False
+
+    def _update_sentence(self):
+        stable = self.stable_status
+        if stable["is_stable"]:
+            sign = stable["sign"]
+            if sign == "No hand":
+                self.last_added_sign = None
+            elif sign != "Unknown" and sign != self.last_added_sign:
+                self.sentence.append(sign)
+                self.last_added_sign = sign
+
+    def clear_sentence(self):
+        self.sentence = []
+        self.last_added_sign = None
 
     def _extended_fingers(self, landmarks, handedness):
         points = landmarks.landmark
