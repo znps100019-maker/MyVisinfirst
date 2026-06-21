@@ -76,6 +76,8 @@ def build_args():
     parser.add_argument("--no-srt", action="store_true", help="Do not generate .srt subtitle file.")
     parser.add_argument("--no-txt", action="store_true", help="Do not generate .txt timeline file.")
     parser.add_argument("--min-duration", type=float, default=0.2, help="Minimum duration of a gesture segment in seconds.")
+    parser.add_argument("--headless", action="store_true", help="Run without opening a GUI window.")
+    parser.add_argument("--max-frames", type=int, default=0, help="Stop after this many frames.")
     return parser.parse_args()
 
 
@@ -208,7 +210,8 @@ def main():
 
     print(f"Loaded model: {model_path}")
     print("Press q to quit. Press c to clear the sentence.")
-    cv2.namedWindow("Sign Language Video Recognizer", cv2.WINDOW_NORMAL)
+    if not args.headless:
+        cv2.namedWindow("Sign Language Video Recognizer", cv2.WINDOW_NORMAL)
 
     try:
         while True:
@@ -228,24 +231,26 @@ def main():
 
             if results.multi_hand_landmarks:
                 landmarks = results.multi_hand_landmarks[0]
-                mp_drawing.draw_landmarks(frame, landmarks, mp_hands.HAND_CONNECTIONS)
+                if not args.headless:
+                    mp_drawing.draw_landmarks(frame, landmarks, mp_hands.HAND_CONNECTIONS)
 
                 query_vector = normalize_landmarks(mediapipe_landmarks_to_list(landmarks))
                 current_sign, confidence = classify_knn(query_vector, samples, k=args.k)
                 if confidence < args.min_confidence:
                     current_sign = "Unknown"
 
-                x_vals = [landmark.x for landmark in landmarks.landmark]
-                y_vals = [landmark.y for landmark in landmarks.landmark]
-                x_pos = max(10, int(min(x_vals) * frame.shape[1]))
-                y_pos = max(30, int(min(y_vals) * frame.shape[0]) - 28)
-                draw_text(
-                    frame,
-                    f"{display_label(current_sign)} {confidence:.0%}",
-                    (x_pos, y_pos),
-                    22,
-                    (255, 255, 0),
-                )
+                if not args.headless:
+                    x_vals = [landmark.x for landmark in landmarks.landmark]
+                    y_vals = [landmark.y for landmark in landmarks.landmark]
+                    x_pos = max(10, int(min(x_vals) * frame.shape[1]))
+                    y_pos = max(30, int(min(y_vals) * frame.shape[0]) - 28)
+                    draw_text(
+                        frame,
+                        f"{display_label(current_sign)} {confidence:.0%}",
+                        (x_pos, y_pos),
+                        22,
+                        (255, 255, 0),
+                    )
                 history.append(current_sign)
             else:
                 history.append("No hand")
@@ -275,29 +280,34 @@ def main():
                         "start_time": current_time
                     }
 
-            if stable_sign != "No hand":
-                draw_panel(
-                    frame,
-                    [
-                        {
-                            "text": f"手語: {display_label(stable_sign)}  {stable_confidence:.0%}",
-                            "color": (0, 255, 255),
-                            "font_size": 24,
-                        }
-                    ],
-                    width=460,
-                )
+            if not args.headless:
+                if stable_sign != "No hand":
+                    draw_panel(
+                        frame,
+                        [
+                            {
+                                "text": f"手語: {display_label(stable_sign)}  {stable_confidence:.0%}",
+                                "color": (0, 255, 255),
+                                "font_size": 24,
+                            }
+                        ],
+                        width=460,
+                    )
 
-            draw_sentence(frame, sentence)
-            cv2.imshow("Sign Language Video Recognizer", frame)
+                draw_sentence(frame, sentence)
+                cv2.imshow("Sign Language Video Recognizer", frame)
 
-            key = cv2.waitKey(10) & 0xFF
-            if key == ord("q"):
-                break
-            if key == ord("c"):
-                sentence = []
-                last_added_sign = None
-            if cv2.getWindowProperty("Sign Language Video Recognizer", cv2.WND_PROP_VISIBLE) < 1:
+                key = cv2.waitKey(10) & 0xFF
+                if key == ord("q"):
+                    break
+                if key == ord("c"):
+                    sentence = []
+                    last_added_sign = None
+                if cv2.getWindowProperty("Sign Language Video Recognizer", cv2.WND_PROP_VISIBLE) < 1:
+                    break
+
+            if args.max_frames > 0 and frame_idx >= args.max_frames:
+                print(f"Reached max frames: {args.max_frames}")
                 break
     finally:
         # 影片結束時，結算最後一個手勢片段
@@ -313,7 +323,8 @@ def main():
 
         cap.release()
         hands_detector.close()
-        cv2.destroyAllWindows()
+        if not args.headless:
+            cv2.destroyAllWindows()
 
         print("\nRecognition result")
         print("=" * 40)
