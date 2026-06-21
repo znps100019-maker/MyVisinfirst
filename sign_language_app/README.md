@@ -4,11 +4,12 @@
 
 ## 📂 目錄檔案說明
 1. `requirements.txt` - 本子專案所需的相依套件清單。
-2. `downloader.py` - 下載手語影片。預設會下載您指定的 YouTube 手語單元一播放清單，並自動依影片名稱將影片歸類至 `raw_videos/<手語意思>/` 下。
-3. `extract_dataset.py` - 讀取已下載的影片，使用 MediaPipe Hands 擷取手部的 21 個 3D 關節點，進行「平移與縮放歸一化」處理，並打包儲存至 `dataset.json`。
-4. `train_classifier.py` - 讀取 `dataset.json` 特徵，編譯並生成 KNN 分類樣板資料庫 `model.json`。
-5. `recognizer.py` - 載入 `model.json` 樣板庫，開啟相機，實時透過我們手寫的 KNN 演算法進行手語單字預測，並在畫面底部進行連貫手語翻譯。
-6. `video_recognizer.py` - 影片手語辨識工具。支援辨識本機影片或直接以網路影片 URL（如 YouTube 連結）進行串流播放與即時辨識。
+2. `crawler.py` - 詞庫影片爬蟲。連線「臺灣手語詞庫」API 下載全部 519 個詞彙影片，並歸類至 `raw_videos/<手語詞彙>/`。
+3. `downloader.py` - 下載手語影片。預設會下載您指定的 YouTube 手語單元一播放清單，並自動依影片名稱將影片歸類至 `raw_videos/<手語意思>/` 下。
+4. `extract_dataset.py` - 讀取已下載的影片，使用 MediaPipe Hands 擷取手部的 21 個 3D 關節點，進行「平移與縮放歸一化」處理，並打包儲存至 `dataset.json`。
+5. `train_classifier.py` - 讀取 `dataset.json` 特徵，編譯並生成 KNN 分類樣板資料庫 `model.json`。
+6. `recognizer.py` - 載入 `model.json` 樣板庫，開啟相機，實時透過我們手寫的 KNN 演算法進行手語單字預測，並在畫面底部進行連貫手語翻譯。
+7. `video_recognizer.py` - 影片手語辨識工具。支援辨識本機影片或直接以網路影片 URL（如 YouTube 連結）進行串流播放與即時辨識。
 
 ---
 
@@ -26,10 +27,16 @@ $env:Path = "$PWD\.venv\Scripts;$PWD\tools\mingit-2.54.0\cmd;$env:Path"
 pip install -r sign_language_app/requirements.txt
 ```
 
-### 步驟 2：下載手語影片
-執行以下指令，系統會自動下載手語播放清單並依據影片名稱將影片分類到對應的手勢資料夾中：
+### 步驟 2：下載手語影片 (二選一)
+
+**選項 A：下載「臺灣手語詞庫」全部 519 個詞彙影片 (推薦)**
+執行以下指令，透過爬蟲下載所有詞庫影片：
 ```powershell
-# 使用預設的「基礎手語單元一」播放清單進行下載與自動歸類
+python sign_language_app/crawler.py
+```
+
+**選項 B：下載 YouTube 教學播放清單影片**
+```powershell
 python sign_language_app/downloader.py
 ```
 *（影片將會儲存在 `sign_language_app/raw_videos/` 下）*

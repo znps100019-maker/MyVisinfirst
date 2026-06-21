@@ -157,8 +157,12 @@ def main():
     
     dataset = {}
     
-    # 掃描子目錄獲取分類標籤
-    categories = [d for d in os.listdir(videos_dir) if os.path.isdir(os.path.join(videos_dir, d))]
+    # 掃描子目錄獲取分類標籤 (排除舊版的大型 YouTube 影片分類)
+    EXCLUDED_CATEGORIES = {"deaf", "disability", "drink", "eat", "friend", "hello", "help", "no", "sorry", "uncategorized", "yes"}
+    categories = [
+        d for d in os.listdir(videos_dir) 
+        if os.path.isdir(os.path.join(videos_dir, d)) and d not in EXCLUDED_CATEGORIES
+    ]
     
     print(f"正在從目錄 {videos_dir} 擷取特徵...")
     
