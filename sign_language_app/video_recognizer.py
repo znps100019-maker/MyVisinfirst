@@ -78,6 +78,7 @@ def build_args():
     parser.add_argument("--min-duration", type=float, default=0.2, help="Minimum duration of a gesture segment in seconds.")
     parser.add_argument("--headless", action="store_true", help="Run without opening a GUI window.")
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after this many frames.")
+    parser.add_argument("--frame-interval", type=int, default=1, help="Process one frame every N frames to speed up.")
     return parser.parse_args()
 
 
@@ -220,6 +221,9 @@ def main():
                 break
 
             current_time = frame_idx / fps
+            if frame_idx % args.frame_interval != 0:
+                frame_idx += 1
+                continue
             frame_idx += 1
 
             frame = cv2.flip(frame, 1)
