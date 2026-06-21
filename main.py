@@ -175,6 +175,9 @@ def main():
     if target_sign:
         print(f"Target sign: {target_sign}")
 
+    if not args.headless:
+        cv2.namedWindow("Hand Control - Main", cv2.WINDOW_NORMAL)
+
     try:
         while True:
             # 每次迴圈讀取一張攝影機畫面，後面所有辨識都用這張影像。
