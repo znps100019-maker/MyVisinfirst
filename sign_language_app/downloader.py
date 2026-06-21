@@ -1,119 +1,138 @@
+import argparse
 import os
-import sys
 import re
+import shutil
+import sys
+from pathlib import Path
 
-# 嘗試載入 yt-dlp，若尚未安裝會提示使用者
 try:
-    import yt_dlp
+    from labels import label_keywords
 except ImportError:
-    print("錯誤：找不到 yt-dlp 模組。請確認是否已安裝套件（可透過 pip install yt-dlp 安裝）。")
-    sys.exit(1)
+    from sign_language_app.labels import label_keywords
 
-# 手語詞彙分類關鍵字對照表 (用於自動將下載的影片分類到正確的資料夾)
-CATEGORIES = {
-    "hello": ["你好", "hello", "greet", "嗨"],
-    "thank_you": ["謝謝", "thanks", "thank you", "感恩"],
-    "goodbye": ["再見", "goodbye", "bye"],
-    "sorry": ["對不起", "sorry", "抱歉"],
-    "i": [" 我 ", "我", " me ", " i "],
-    "you": [" 你 ", "你", "you"],
-    "he_she": [" 他 ", "她", "他", "he", "she", "him", "her"]
-}
 
-# 預設手語教學 YouTube 播放清單（基礎手語單元1 嗨你好）
-DEFAULT_PLAYLIST = "https://www.youtube.com/watch?v=nE4kuhO0l3E&list=PLzI2EvXfsJoOJFf3f1aqjQj7LIIrWuKYu"
+DEFAULT_PLAYLIST = (
+    "https://www.youtube.com/watch?v=nE4kuhO0l3E"
+    "&list=PLzI2EvXfsJoOJFf3f1aqjQj7LIIrWuKYu"
+)
+
+
+def normalize_text(value):
+    return re.sub(r"\s+", " ", value or "").strip().lower()
+
 
 def get_category_from_title(title):
-    """根據影片標題，自動判斷手語語意分類標籤"""
-    title_lower = title.lower()
-    for label, keywords in CATEGORIES.items():
-        for kw in keywords:
-            # 如果關鍵字是前後有空格的英文，使用正則匹配以防誤判單字中的字母
-            if kw.startswith(" ") or kw.endswith(" "):
-                if re.search(r'\b' + re.escape(kw.strip()) + r'\b', title_lower):
-                    return label
-            elif kw in title_lower:
-                return label
+    title_lower = normalize_text(title)
+    candidates = []
+    for label, keywords in label_keywords().items():
+        for keyword in keywords:
+            normalized = normalize_text(keyword)
+            if normalized:
+                candidates.append((label, normalized))
+
+    for label, keyword in sorted(candidates, key=lambda item: len(item[1]), reverse=True):
+        if _keyword_matches(title_lower, keyword):
+            return label
     return "uncategorized"
 
+
 def download_video(url, base_output_dir):
-    """下載單部影片或播放清單並進行分類"""
-    print(f"正在分析連結: {url}")
-    
-    # 建立暫時存放原始下載檔案的目錄
-    temp_dir = os.path.join(base_output_dir, "temp_downloads")
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    # yt-dlp 設定：下載最低畫質的直接 mp4 檔案 (極小、極快，且不需要額外安裝 ffmpeg 進行影音合併)
-    ydl_opts = {
-        'format': 'worst[ext=mp4]/worst', 
-        'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-        'ignoreerrors': True,
-        'no_warnings': True,
-        'quiet': False
+    try:
+        import yt_dlp
+    except ImportError:
+        print("Missing dependency: yt-dlp. Install it with: pip install yt-dlp")
+        sys.exit(1)
+
+    base_output_dir = Path(base_output_dir)
+    temp_dir = base_output_dir / "temp_downloads"
+    raw_dir = base_output_dir / "raw_videos"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    options = {
+        "format": "worst[ext=mp4]/worst",
+        "outtmpl": str(temp_dir / "%(title).160s [%(id)s].%(ext)s"),
+        "ignoreerrors": True,
+        "no_warnings": True,
+        "quiet": False,
     }
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        # 先擷取資訊
+
+    print(f"Downloading sign-language videos from: {url}")
+    with yt_dlp.YoutubeDL(options) as ydl:
         try:
             info = ydl.extract_info(url, download=True)
-        except Exception as e:
-            print(f"下載時發生錯誤: {e}")
+        except Exception as exc:
+            print(f"Download failed: {exc}")
             return
-        
-        # 整理並分類下載的檔案
-        if info is None:
-            print("無法解析連結資訊。")
-            return
-            
-        entries = info.get('entries', [info]) # 如果是播放清單，會有多個 entries
-        
-        for entry in entries:
-            if not entry:
-                continue
-            title = entry.get('title')
-            ext = entry.get('ext', 'mp4')
-            
-            if not title:
-                continue
-                
-            # 清理檔名中可能存在的不安全字元
-            safe_title = re.sub(r'[\\/*?:"<>|]', "", title)
-            temp_file_path = os.path.join(temp_dir, f"{safe_title}.{ext}")
-            
-            if os.path.exists(temp_file_path):
-                # 判定分類
-                category = get_category_from_title(title)
-                dest_dir = os.path.join(base_output_dir, "raw_videos", category)
-                os.makedirs(dest_dir, exist_ok=True)
-                
-                # 移動到分類資料夾
-                dest_file_path = os.path.join(dest_dir, f"{safe_title}.{ext}")
-                try:
-                    os.rename(temp_file_path, dest_file_path)
-                    print(f"成功下載並歸類: [{category}] {safe_title}.{ext}")
-                except Exception as e:
-                    print(f"移動檔案時發生錯誤: {e}")
-            else:
-                print(f"找不到下載的暫存檔案: {temp_file_path}")
-                
-    # 清除暫存目錄
+
+    entries = info.get("entries", [info]) if info else []
+    moved = 0
+
+    for entry in entries:
+        if not entry:
+            continue
+
+        title = entry.get("title") or "untitled"
+        video_id = entry.get("id") or ""
+        category = get_category_from_title(title)
+        category_dir = raw_dir / category
+        category_dir.mkdir(parents=True, exist_ok=True)
+
+        downloaded = _find_downloaded_file(temp_dir, video_id, title)
+        if downloaded is None:
+            print(f"[skip] Could not locate downloaded file for: {title}")
+            continue
+
+        destination = category_dir / downloaded.name
+        if destination.exists():
+            destination = category_dir / f"{destination.stem}-copy{destination.suffix}"
+        shutil.move(str(downloaded), str(destination))
+        moved += 1
+        print(f"[{category}] {title}")
+
+    _cleanup_empty_dir(temp_dir)
+    print(f"Done. Moved {moved} video(s) into: {raw_dir}")
+
+
+def _keyword_matches(title, keyword):
+    if keyword.isascii() and re.match(r"^[a-z0-9 _-]+$", keyword):
+        return re.search(rf"\b{re.escape(keyword)}\b", title) is not None
+    return keyword in title
+
+
+def _find_downloaded_file(temp_dir, video_id, title):
+    candidates = list(temp_dir.glob("*"))
+    if video_id:
+        for path in candidates:
+            if video_id in path.name:
+                return path
+
+    safe_title = re.sub(r'[\\/*?:"<>|]', "", title)[:120]
+    for path in candidates:
+        if safe_title and safe_title in path.name:
+            return path
+    return None
+
+
+def _cleanup_empty_dir(path):
     try:
-        if os.path.exists(temp_dir) and not os.listdir(temp_dir):
-            os.rmdir(temp_dir)
-    except:
+        if path.exists() and not any(path.iterdir()):
+            path.rmdir()
+    except OSError:
         pass
 
+
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="下載手語 YouTube 影片並分類。")
-    parser.add_argument("--url", default=DEFAULT_PLAYLIST, help="YouTube 影片或播放清單網址。")
-    parser.add_argument("--output-dir", default=".", help="專案儲存根目錄。")
+    parser = argparse.ArgumentParser(description="Download and sort sign-language training videos.")
+    parser.add_argument("--url", default=DEFAULT_PLAYLIST, help="YouTube video or playlist URL.")
+    parser.add_argument(
+        "--output-dir",
+        default=Path(__file__).resolve().parent,
+        help="Output directory. raw_videos/ will be created here.",
+    )
     args = parser.parse_args()
 
-    base_dir = os.path.abspath(args.output_dir)
-    download_video(args.url, base_dir)
-    print("\n下載與分類程序執行完畢。")
+    download_video(args.url, os.path.abspath(args.output_dir))
+
 
 if __name__ == "__main__":
     main()

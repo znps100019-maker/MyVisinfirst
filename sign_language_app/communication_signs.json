@@ -1,0 +1,140 @@
+[
+  {
+    "label": "hello",
+    "display": "你好",
+    "english": "Hello",
+    "keywords": ["hello", "hi", "greet", "greeting", "你好", "問好", "打招呼"]
+  },
+  {
+    "label": "thank_you",
+    "display": "謝謝",
+    "english": "Thank you",
+    "keywords": ["thank", "thanks", "thank you", "謝謝", "多謝", "感謝"]
+  },
+  {
+    "label": "sorry",
+    "display": "對不起",
+    "english": "Sorry",
+    "keywords": ["sorry", "apolog", "對不起", "抱歉", "不好意思"]
+  },
+  {
+    "label": "goodbye",
+    "display": "再見",
+    "english": "Goodbye",
+    "keywords": ["goodbye", "bye", "see you", "再見", "拜拜"]
+  },
+  {
+    "label": "please",
+    "display": "請",
+    "english": "Please",
+    "keywords": ["please", "請", "拜託", "麻煩"]
+  },
+  {
+    "label": "help",
+    "display": "幫忙",
+    "english": "Help",
+    "keywords": ["help", "assist", "幫忙", "幫助", "協助"]
+  },
+  {
+    "label": "yes",
+    "display": "是 / 好",
+    "english": "Yes / OK",
+    "keywords": ["yes", "ok", "right", "是", "好", "可以", "對"]
+  },
+  {
+    "label": "no",
+    "display": "不是 / 不要",
+    "english": "No",
+    "keywords": ["no", "not", "wrong", "不是", "不要", "不可以", "錯"]
+  },
+  {
+    "label": "understand",
+    "display": "明白",
+    "english": "Understand",
+    "keywords": ["understand", "明白", "懂", "了解"]
+  },
+  {
+    "label": "dont_understand",
+    "display": "不明白",
+    "english": "Do not understand",
+    "keywords": ["don't understand", "dont understand", "not understand", "不明白", "不懂", "看不懂"]
+  },
+  {
+    "label": "deaf",
+    "display": "聾人",
+    "english": "Deaf",
+    "keywords": ["deaf", "聾", "聾人", "聽障"]
+  },
+  {
+    "label": "hearing",
+    "display": "健聽",
+    "english": "Hearing person",
+    "keywords": ["hearing", "健聽", "聽人"]
+  },
+  {
+    "label": "friend",
+    "display": "朋友",
+    "english": "Friend",
+    "keywords": ["friend", "朋友"]
+  },
+  {
+    "label": "name",
+    "display": "名字",
+    "english": "Name",
+    "keywords": ["name", "名字", "姓名", "叫什麼"]
+  },
+  {
+    "label": "wait",
+    "display": "等一下",
+    "english": "Wait",
+    "keywords": ["wait", "等", "等一下", "稍等"]
+  },
+  {
+    "label": "toilet",
+    "display": "廁所",
+    "english": "Toilet",
+    "keywords": ["toilet", "bathroom", "restroom", "wc", "廁所", "洗手間"]
+  },
+  {
+    "label": "eat",
+    "display": "吃",
+    "english": "Eat",
+    "keywords": ["eat", "food", "吃", "食", "飯"]
+  },
+  {
+    "label": "drink",
+    "display": "喝水",
+    "english": "Drink",
+    "keywords": ["drink", "water", "喝", "飲", "水"]
+  },
+  {
+    "label": "hospital",
+    "display": "醫院",
+    "english": "Hospital",
+    "keywords": ["hospital", "doctor", "medical", "醫院", "醫生", "看醫生"]
+  },
+  {
+    "label": "police",
+    "display": "警察",
+    "english": "Police",
+    "keywords": ["police", "警察", "報警"]
+  },
+  {
+    "label": "money",
+    "display": "錢",
+    "english": "Money",
+    "keywords": ["money", "pay", "price", "錢", "付錢", "幾錢", "多少錢"]
+  },
+  {
+    "label": "bus",
+    "display": "巴士",
+    "english": "Bus",
+    "keywords": ["bus", "巴士", "公車"]
+  },
+  {
+    "label": "taxi",
+    "display": "的士 / 計程車",
+    "english": "Taxi",
+    "keywords": ["taxi", "cab", "的士", "計程車"]
+  }
+]
