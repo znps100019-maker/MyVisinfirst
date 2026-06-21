@@ -243,6 +243,8 @@ def main():
                     break
                 elif key == ord("f"):
                     show_face_mesh = not show_face_mesh
+                elif key == ord("c"):
+                    sign_recognizer.clear_sentence()
                 
                 # 判斷如果使用者點擊視窗右上角的「X」關閉按鈕，也安全退出迴圈釋放相機
                 if cv2.getWindowProperty("Hand Control - Main", cv2.WND_PROP_VISIBLE) < 1:
