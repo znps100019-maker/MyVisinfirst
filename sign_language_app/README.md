@@ -8,6 +8,7 @@
 3. `extract_dataset.py` - 讀取已下載的影片，使用 MediaPipe Hands 擷取手部的 21 個 3D 關節點，進行「平移與縮放歸一化」處理，並打包儲存至 `dataset.json`。
 4. `train_classifier.py` - 讀取 `dataset.json` 特徵，編譯並生成 KNN 分類樣板資料庫 `model.json`。
 5. `recognizer.py` - 載入 `model.json` 樣板庫，開啟相機，實時透過我們手寫的 KNN 演算法進行手語單字預測，並在畫面底部進行連貫手語翻譯。
+6. `video_recognizer.py` - 影片手語辨識工具。支援辨識本機影片或直接以網路影片 URL（如 YouTube 連結）進行串流播放與即時辨識。
 
 ---
 
@@ -54,6 +55,16 @@ python sign_language_app/recognizer.py
 * **鍵盤快捷鍵**：
   - 按鍵盤 **`q` 鍵** 或點選視窗右上角「X」：安全退出程式。
   - 按鍵盤 **`c` 鍵**：清空底部已串接的連貫手語語句。
+
+### 步驟 6：辨識本機影片或網路上的手語影片
+您可以傳入本機影片檔案路徑，或者**直接傳入 YouTube 網址**，程式會流暢進行影片播放並顯示偵測骨骼與翻譯：
+```powershell
+# 1. 辨識本機下載的手語影片
+python sign_language_app/video_recognizer.py --input sign_language_app/raw_videos/hello/xxxx.mp4
+
+# 2. 辨識網路上的 YouTube 影片（即時串流）
+python sign_language_app/video_recognizer.py --input "https://www.youtube.com/watch?v=nE4kuhO0l3E"
+```
 
 ---
 
