@@ -20,9 +20,9 @@ mp_hands = mp.solutions.hands
 class HandSignRecognizer:
     """Detect hand landmarks and classify simple static hand signs."""
 
-    THUMB_STRAIGHT_THRESHOLD = 0.86
-    FINGER_STRAIGHT_THRESHOLD = 0.82
-    FINGER_WRIST_EXTENSION_RATIO = 1.1
+    THUMB_STRAIGHT_THRESHOLD = 0.65
+    FINGER_STRAIGHT_THRESHOLD = 0.55
+    FINGER_WRIST_EXTENSION_RATIO = 0.90
     THUMB_SPREAD_THRESHOLD = 0.58
     OK_PINCH_THRESHOLD = 0.38
     STABLE_CONFIDENCE_THRESHOLD = 0.6
@@ -126,12 +126,12 @@ class HandSignRecognizer:
         "fist": "Fist (Solidarity)",
     }
 
-    def __init__(self, max_num_hands=2, history_size=8, stable_min_count=5):
+    def __init__(self, max_num_hands=2, history_size=8, stable_min_count=3):
         self.hands = mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=max_num_hands,
-            min_detection_confidence=0.7,
-            min_tracking_confidence=0.6,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.4,
         )
         self.history = deque(maxlen=history_size)
         self.stable_min_count = stable_min_count
