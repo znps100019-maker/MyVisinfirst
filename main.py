@@ -193,6 +193,8 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
     last_target_time = 0
     frame_count = 0
     show_face_mesh = True
+    skip_frames = 0  # 跳過幀計數器
+    process_every_n_frames = 1  # 每 N 幀處理一次（1 = 不跳過）
 
     while True:
         success, img = cap.read()

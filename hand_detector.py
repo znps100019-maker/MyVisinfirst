@@ -137,12 +137,16 @@ class HandSignRecognizer:
         self.stable_min_count = stable_min_count
         self.sentence = []
         self.last_added_sign = None
+        self.gesture_history = []  # 完整的手勢歷史
+        self.gesture_start_time = None  # 目前手勢開始時間
 
     def process(self, frame):
         """Return detected hands with landmarks, handedness, and sign labels."""
+        import time
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.hands.process(rgb)
+        current_time = time.time()
 
         detections = []
         if not results.multi_hand_landmarks:
@@ -435,10 +439,19 @@ class HandSignRecognizer:
         index_mcp = points[self.FINGER_MCPS["index"]]
         wrist = points[0]
         middle_mcp = points[self.FINGER_MCPS["middle"]]
+        index_tip = points[self.FINGER_TIPS["index"]]
 
+        # 計算拇指與食指的夾角
         distance = self._distance(thumb_tip, index_mcp)
         palm_size = max(self._distance(wrist, middle_mcp), 0.001)
-        return distance / palm_size
+        spread_ratio = distance / palm_size
+        
+        # 計算拇指與食指尖端的距離（輔助判斷）
+        thumb_index_distance = self._distance(thumb_tip, index_tip)
+        thumb_index_ratio = thumb_index_distance / palm_size
+        
+        # 如果拇指和食指距離很遠，表示拇指展開
+        return max(spread_ratio, thumb_index_ratio * 0.8)
 
     def _classify_sign(self, fingers, landmarks):
         thumb = fingers["thumb"]
@@ -447,7 +460,7 @@ class HandSignRecognizer:
         ring = fingers["ring"]
         pinky = fingers["pinky"]
 
-        if self._is_ok_sign(landmarks) and middle and ring and pinky:
+        if self._is_ok_sign(landmarks):
             return "OK (Zero / Can)"
 
         if thumb and index and pinky and not middle and not ring:
@@ -460,31 +473,48 @@ class HandSignRecognizer:
         if not any(fingers.values()):
             return "Fist (Solidarity)"
 
-        is_thumb_spread = self._thumb_spread_ratio(landmarks) > self.THUMB_SPREAD_THRESHOLD
-
-        if not is_thumb_spread:
-            if index and middle and ring and pinky:
-                return "Number 4 (Salute)"
-            if index and middle and ring and not pinky:
-                return "Number 3"
-            if index and middle and not ring and not pinky:
-                return "Number 2 (Victory)"
-            if index and not middle and not ring and not pinky:
-                return "Number 1 (Secret)"
-        else:
-            if index and middle and ring and pinky:
+        # 計算伸直的手指數量
+        extended_count = sum([index, middle, ring, pinky])
+        
+        # 特殊手勢判斷
+        if thumb and not any([index, middle, ring, pinky]):
+            return "Good / Male (Thumbs up)"
+        if pinky and not any([thumb, index, middle, ring]):
+            return "Bad / Female (Pinky)"
+        if index and pinky and not thumb and not middle and not ring:
+            return "Cow / Horns"
+        if thumb and index and pinky and not middle and not ring:
+            return "I love you"
+        
+        # 檢查拇指是否真的展開（使用多個特徵）
+        thumb_spread_ratio = self._thumb_spread_ratio(landmarks)
+        is_thumb_spread = thumb_spread_ratio > self.THUMB_SPREAD_THRESHOLD
+        
+        # 數字手勢判斷
+        if is_thumb_spread:
+            # 拇指展開的情況
+            if extended_count == 4 and index and middle and ring and pinky:
                 return "Number 5 (Hello / Greet)"
-            if index and middle and ring and not pinky:
+            elif extended_count == 3 and index and middle and ring:
                 return "Number 9"
-            if index and middle and not ring and not pinky:
-                return "Number 8"
-            if index and not middle and not ring and not pinky:
-                return "Number 7 (Gun)"
-            if pinky and not index and not middle and not ring:
+            elif extended_count == 2:
+                if index and middle:
+                    return "Number 8"
+                elif index and pinky:
+                    return "Number 7 (Gun)"
+            elif extended_count == 1 and pinky:
                 return "Number 6"
-            if not any([index, middle, ring, pinky]):
-                return "Good / Male (Thumbs up)"
-
+        else:
+            # 拇指未展開的情況
+            if extended_count == 4 and index and middle and ring and pinky:
+                return "Number 4 (Salute)"
+            elif extended_count == 3 and index and middle and ring:
+                return "Number 3"
+            elif extended_count == 2 and index and middle:
+                return "Number 2 (Victory)"
+            elif extended_count == 1 and index:
+                return "Number 1 (Secret)"
+        
         return "Unknown"
 
     def _is_ok_sign(self, landmarks):

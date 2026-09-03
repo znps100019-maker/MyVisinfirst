@@ -45,7 +45,7 @@ class FaceExpressionRecognizer:
         # Distance between outer corners of eyes (33 to 263) as scale reference
         d_eyes = self._distance(pts[33], pts[263])
         smile_ratio = d_mouth / max(d_eyes, 0.001)
-        is_smiling = smile_ratio > 0.56
+        is_smiling = smile_ratio > 0.50
         
         # 3. Mouth open detection (Surprise)
         # Inner mouth height (13 to 14)
@@ -53,7 +53,7 @@ class FaceExpressionRecognizer:
         # Face height (Forehead 10 to Chin 152)
         d_face_height = self._distance(pts[10], pts[152])
         mouth_ratio = d_inner_mouth / max(d_face_height, 0.001)
-        is_mouth_open = mouth_ratio > 0.08
+        is_mouth_open = mouth_ratio > 0.06
         
         # 4. Expressions Decision Tree
         expression = "Neutral"
@@ -63,6 +63,8 @@ class FaceExpressionRecognizer:
             expression = "Wink Left"
         elif is_right_closed:
             expression = "Wink Right"
+        elif is_mouth_open and is_smiling:
+            expression = "Laughing"
         elif is_mouth_open:
             expression = "Mouth Open"
         elif is_smiling:
