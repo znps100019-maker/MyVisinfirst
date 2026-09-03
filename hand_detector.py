@@ -23,7 +23,7 @@ class HandSignRecognizer:
     THUMB_STRAIGHT_THRESHOLD = 0.65
     FINGER_STRAIGHT_THRESHOLD = 0.55
     FINGER_WRIST_EXTENSION_RATIO = 0.90
-    THUMB_SPREAD_THRESHOLD = 0.58
+    THUMB_SPREAD_THRESHOLD = 0.55
     OK_PINCH_THRESHOLD = 0.38
     STABLE_CONFIDENCE_THRESHOLD = 0.6
 
@@ -485,6 +485,16 @@ class HandSignRecognizer:
             return "Cow / Horns"
         if thumb and index and pinky and not middle and not ring:
             return "I love you"
+        # 新增：拇指+食指+中指+小指（無名指彎曲的 I love you 變體）
+        if thumb and index and middle and pinky and not ring:
+            return "I love you"
+        # 新增：拇指+食指（手槍手勢）
+        if thumb and index and not middle and not ring and not pinky:
+            thumb_spread = self._thumb_spread_ratio(landmarks)
+            if thumb_spread > 0.7:
+                return "Number 7 (Gun)"
+            else:
+                return "Number 8"
         
         # 檢查拇指是否真的展開（使用多個特徵）
         thumb_spread_ratio = self._thumb_spread_ratio(landmarks)
