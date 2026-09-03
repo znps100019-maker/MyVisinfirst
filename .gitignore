@@ -1,25 +1,18 @@
-.venv/
-.python310/
-.uv-cache/
-.uv-python/
-.pip-cache/
+# 備份檔案
+*_backup.py
+*_backup.*
+
+# 臨時檔案
+*.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-python-*.exe
 
-.env
-.env.*
+# 測試輸出
+output.json
 
+# 虛擬環境
+venv/
+.venv/
+
+# IDE 設定
 .vscode/
-*.code-workspace
-
-tools/
-
-# Sign language app data and models
-sign_language_app/dataset.json
-sign_language_app/model.json
-sign_language_app/raw_videos/
-sign_language_app/temp_downloads/
-*.srt
-*_timeline.txt
+.idea/
