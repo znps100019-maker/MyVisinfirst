@@ -37,8 +37,8 @@ def main():
             
         print(f"  分類 '{category}': 導入 {len(vectors)} 個影格特徵樣本。")
         for vec in vectors:
-            # 確保向量維度是 63 (21點 * 3)
-            if len(vec) == 63:
+            # 確保向量維度是 126 (雙手 42點 * 3)
+            if len(vec) == 126:
                 model_data["samples"].append({
                     "label": category,
                     "vector": vec

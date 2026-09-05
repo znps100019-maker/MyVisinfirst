@@ -54,8 +54,8 @@ handle_non_ascii_path()
 
 import cv2
 
-from face_detector import FaceExpressionRecognizer
-from hand_detector import HandSignRecognizer
+from core.detectors.face_detector import FaceExpressionRecognizer
+from core.detectors.hand_detector import HandSignRecognizer
 
 
 def build_args():
@@ -142,21 +142,39 @@ def configure_camera(cap, args):
 
 
 def open_video_source(args):
-    if args.video:
+    if getattr(args, 'video', None):
         video_input = args.video
         if video_input.startswith(("http://", "https://")):
             import yt_dlp
             options = {
-                "format": "worst[ext=mp4]/worst",
+                "format": "bestvideo[height<=720][ext=mp4]/bestvideo[ext=mp4]/best",
                 "quiet": True,
                 "no_warnings": True,
             }
-            with yt_dlp.YoutubeDL(options) as ydl:
-                try:
-                    video_input = ydl.extract_info(video_input, download=False)["url"]
-                except Exception as exc:
-                    print(f"Cannot open YouTube video: {exc}")
-                    sys.exit(1)
+            
+            mode = getattr(args, 'stream_mode', '2')
+            if mode == '1':
+                print("正在取得影片串流連結，請稍候...")
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    try:
+                        video_input = ydl.extract_info(video_input, download=False)["url"]
+                    except Exception as exc:
+                        print(f"Cannot open YouTube video: {exc}")
+                        sys.exit(1)
+            else:
+                print("正在下載影片以確保穩定播放，請稍候...")
+                os.makedirs("sign_language_app/temp_downloads", exist_ok=True)
+                download_path = f"sign_language_app/temp_downloads/temp_video_{int(time.time())}.mp4"
+                options["outtmpl"] = download_path
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    try:
+                        ydl.download([video_input])
+                        video_input = download_path
+                        print(f"下載完成！影片已暫存以供穩定辨識。")
+                    except Exception as exc:
+                        print(f"Cannot download YouTube video: {exc}")
+                        sys.exit(1)
+                        
         cap = cv2.VideoCapture(video_input)
     else:
         cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
@@ -256,6 +274,22 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
 
 def main():
     args = build_args()
+
+    # 互動式輸入網址功能
+    if not args.video:
+        print("-" * 50)
+        url_input = input("請貼上 YouTube 或其他網路影片連結 (或直接按 Enter 鍵開啟攝影機): ").strip()
+        if url_input:
+            args.video = url_input
+
+    # 選擇串流或下載模式
+    if args.video and args.video.startswith(("http://", "https://")):
+        mode = input("請問要 (1) 即時串流 還是 (2) 下載後穩定播放？[預設 2]: ").strip()
+        args.stream_mode = mode if mode in ["1", "2"] else "2"
+    else:
+        args.stream_mode = "1"
+        
+    print("-" * 50)
 
     sign_recognizer = HandSignRecognizer()
     face_recognizer = None if args.no_face else FaceExpressionRecognizer()

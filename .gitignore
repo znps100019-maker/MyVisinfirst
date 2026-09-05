@@ -16,3 +16,8 @@ venv/
 # IDE 設定
 .vscode/
 .idea/
+
+# 暫存與套件快取
+.pip-cache/
+.uv-python/
+sign_language_app/raw_videos/

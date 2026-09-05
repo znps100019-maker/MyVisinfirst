@@ -60,33 +60,49 @@ except ImportError:
     print("錯誤：找不到 mediapipe 模組。請確認是否已安裝套件。")
     sys.exit(1)
 
-def normalize_landmarks(landmarks_list):
+def normalize_landmarks(multi_hand_landmarks):
     """
-    手部關節點正規化演算法：
-    1. 平移不變性：以手腕 (第 0 點) 為原點 (0, 0, 0)，所有關節點座標減去手腕座標。
-    2. 比例不變性：計算手腕 (第 0 點) 到中指根部 MCP (第 9 點) 的 3D 距離作為「掌心基準大小」。
-       將所有座標除以此基準大小，消除因為手離鏡頭遠近產生的縮放影響。
+    雙手關節點 126 維度正規化演算法：
+    1. 平移不變性：以第一隻手的手腕為全局原點 (0, 0, 0)。
+    2. 比例不變性：計算第一隻手掌心大小做為全局縮放基準。
+    3. 若只有一隻手，後半 63 維度補零。
     """
-    wrist = landmarks_list[0]
-    middle_mcp = landmarks_list[9]
+    if not multi_hand_landmarks:
+        return [0.0] * 126
+        
+    hand1 = multi_hand_landmarks[0].landmark
+    wrist = hand1[0]
+    middle_mcp = hand1[9]
     
-    # 計算掌心大小（手腕到中指根部的歐式距離）
-    dx = middle_mcp['x'] - wrist['x']
-    dy = middle_mcp['y'] - wrist['y']
-    dz = middle_mcp['z'] - wrist['z']
+    # 計算掌心大小
+    dx = middle_mcp.x - wrist.x
+    dy = middle_mcp.y - wrist.y
+    dz = middle_mcp.z - wrist.z
     scale = np.sqrt(dx**2 + dy**2 + dz**2)
     if scale == 0:
         scale = 1e-6
         
     normalized = []
-    for lm in landmarks_list:
-        # 平移並縮放
-        nx = (lm['x'] - wrist['x']) / scale
-        ny = (lm['y'] - wrist['y']) / scale
-        nz = (lm['z'] - wrist['z']) / scale
+    
+    # 第一隻手
+    for lm in hand1:
+        nx = (lm.x - wrist.x) / scale
+        ny = (lm.y - wrist.y) / scale
+        nz = (lm.z - wrist.z) / scale
         normalized.extend([nx, ny, nz])
         
-    # 回傳 63 維特徵向量 (21 個點 * 3D 軸)
+    # 第二隻手 (以第一隻手為基準)
+    if len(multi_hand_landmarks) > 1:
+        hand2 = multi_hand_landmarks[1].landmark
+        for lm in hand2:
+            nx = (lm.x - wrist.x) / scale
+            ny = (lm.y - wrist.y) / scale
+            nz = (lm.z - wrist.z) / scale
+            normalized.extend([nx, ny, nz])
+    else:
+        # 補零
+        normalized.extend([0.0] * 63)
+        
     return normalized
 
 def process_video(video_path, hands_detector, frame_interval=15):
@@ -114,15 +130,8 @@ def process_video(video_path, hands_detector, frame_interval=15):
         results = hands_detector.process(rgb)
         
         if results.multi_hand_landmarks:
-            # 為了訓練穩定，每次只取畫面中最大或偵測到的第一隻手
-            landmarks = results.multi_hand_landmarks[0]
-            
-            lm_list = []
-            for lm in landmarks.landmark:
-                lm_list.append({'x': lm.x, 'y': lm.y, 'z': lm.z})
-            
-            # 正規化為 63 維向量
-            feat = normalize_landmarks(lm_list)
+            # 正規化為 126 維向量 (雙手)
+            feat = normalize_landmarks(results.multi_hand_landmarks)
             features_list.append(feat)
                 
     cap.release()
@@ -150,7 +159,7 @@ def main():
     # 初始化 MediaPipe Hands
     hands_detector = mp_hands.Hands(
         static_image_mode=False,
-        max_num_hands=1,
+        max_num_hands=2,
         min_detection_confidence=0.7,
         min_tracking_confidence=0.6
     )
