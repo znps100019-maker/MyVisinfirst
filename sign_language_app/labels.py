@@ -5,25 +5,26 @@ from pathlib import Path
 
 BUILT_IN_LABELS = {
     "Fist (Solidarity)": ("握拳", "Fist"),
-    "OK (Zero / Can)": ("OK / 可以", "OK"),
-    "Number 1 (Secret)": ("數字 1", "Number 1"),
-    "Number 2 (Victory)": ("數字 2", "Number 2"),
-    "Number 3": ("數字 3", "Number 3"),
-    "Number 4 (Salute)": ("數字 4 / 你好", "Number 4"),
-    "Number 5 (Hello / Greet)": ("你好", "Hello"),
-    "Number 6": ("數字 6", "Number 6"),
-    "Number 7 (Gun)": ("數字 7", "Number 7"),
-    "Number 8": ("數字 8", "Number 8"),
-    "Number 9": ("數字 9", "Number 9"),
-    "Number 6 (Two hands)": ("數字 6", "Number 6"),
-    "Number 7 (Two hands)": ("數字 7", "Number 7"),
-    "Number 8 (Two hands)": ("數字 8", "Number 8"),
-    "Number 9 (Two hands)": ("數字 9", "Number 9"),
-    "Number 10 (Two hands)": ("數字 10", "Number 10"),
-    "Good / Male (Thumbs up)": ("好 / 男", "Good / Male"),
-    "Bad / Female (Pinky)": ("不好 / 女", "Bad / Female"),
-    "I love you": ("我愛你", "I love you"),
-    "Cow / Horns": ("牛 / 角", "Cow / Horns"),
+    "OK (Zero / Can)": ("OK 手形", "OK"),
+    "Number 1 (Secret)": ("數字 1 / 食指", "Number 1"),
+    "Number 2 (Victory)": ("數字 2 / 食指+中指", "Number 2"),
+    "Number 3": ("數字 3 / 三指", "Number 3"),
+    "Number 4 (Salute)": ("數字 4 / 四指", "Number 4"),
+    "Number 5 (Hello / Greet)": ("數字 5 / 五指", "Number 5"),
+    "Number 6": ("數字 6 / 拇指+小指", "Number 6"),
+    "Number 7 (Gun)": ("數字 7 / 拇指+食指", "Number 7"),
+    "Number 8": ("數字 8 / 拇指+食指+中指", "Number 8"),
+    "Number 9": ("數字 9 / 四指組合", "Number 9"),
+    "Number 6 (Two hands)": ("雙手合計數字 6", "Number 6"),
+    "Number 7 (Two hands)": ("雙手合計數字 7", "Number 7"),
+    "Number 8 (Two hands)": ("雙手合計數字 8", "Number 8"),
+    "Number 9 (Two hands)": ("雙手合計數字 9", "Number 9"),
+    "Number 10 (Two hands)": ("雙手合計數字 10", "Number 10"),
+    "Good / Male (Thumbs up)": ("拇指伸直", "Thumb extended"),
+    "Bad / Female (Pinky)": ("小指伸直", "Pinky extended"),
+    "I love you": ("拇指+食指+小指", "Thumb+index+pinky"),
+    "Cow / Horns": ("食指+小指", "Index+pinky"),
+    "Multiple hands": ("多手畫面", "Multiple hands"),
     "Unknown": ("無法判斷", "Unknown"),
     "No hand": ("沒有手", "No hand"),
 }
@@ -55,6 +56,16 @@ def display_label(label, include_english=True):
     if include_english and info["english"] and info["english"] != info["display"]:
         return f'{info["display"]} / {info["english"]}'
     return info["display"]
+
+
+def classification_label(label, include_english=True):
+    """Return a static shape label without rewriting custom database labels."""
+    if label in BUILT_IN_LABELS:
+        return display_label(label, include_english=include_english)
+    if label in label_map():
+        suffix = f" / {label_map()[label]['english']}" if include_english else ""
+        return f"資料庫標籤: {label}{suffix}"
+    return label
 
 
 def label_keywords():

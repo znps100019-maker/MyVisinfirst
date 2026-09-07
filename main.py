@@ -35,10 +35,11 @@ def handle_non_ascii_path():
 
     relative_script = os.path.relpath(os.path.abspath(__file__), project_root)
     virtual_script = os.path.join(drive, relative_script)
-    virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
-
+    # Keep the interpreter that launched this process when it lives in the
+    # project. A stale .venv launcher can point to a deleted base Python.
+    virtual_python = sys.executable.replace(project_root, drive)
     if not os.path.exists(virtual_python):
-        virtual_python = sys.executable.replace(project_root, drive)
+        virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
 
     args = [virtual_python, virtual_script] + sys.argv[1:]
     try:
@@ -49,8 +50,6 @@ def handle_non_ascii_path():
 
     sys.exit(returncode)
 
-
-handle_non_ascii_path()
 
 import cv2
 
@@ -94,6 +93,16 @@ def build_args():
         type=float,
         default=1.0,
         help="Seconds between repeated target-detected events.",
+    )
+    parser.add_argument(
+        "--combine-two-hands",
+        action="store_true",
+        help="Explicitly sum both hands into a number. Default keeps each hand separate.",
+    )
+    parser.add_argument(
+        "--use-knn",
+        action="store_true",
+        help="Opt in to the existing KNN model as a global candidate.",
     )
     parser.add_argument(
         "--no-face",
@@ -187,7 +196,7 @@ def print_startup(target_sign):
     print("Keyboard Hotkeys:")
     print("  - Press 'q' to quit.")
     print("  - Press 'f' to toggle face mesh blue lines show/hide.")
-    print("  - Press 'c' to clear current sign language sentence.")
+    print("  - Press 'c' to clear current gesture history.")
     if target_sign:
         print(f"Target sign: {target_sign}")
 
@@ -206,21 +215,28 @@ def emit_target_event(target_sign, stable_status):
     )
 
 
+def validate_processed_frames(frame_count, is_video):
+    """Treat an opened-but-empty video as a failed run."""
+    if is_video and frame_count == 0:
+        raise RuntimeError("Video opened but contained zero readable frames.")
+
+
 def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign):
     last_print_time = 0
     last_target_time = 0
     frame_count = 0
     show_face_mesh = True
-    skip_frames = 0  # 跳過幀計數器
-    process_every_n_frames = 1  # 每 N 幀處理一次（1 = 不跳過）
+    target_active = False
+    is_camera = not bool(args.video)
 
     while True:
         success, img = cap.read()
         if not success:
-            print("Cannot read frame from camera.")
+            print("Cannot read frame from camera or video.")
             break
 
-        img = cv2.flip(img, 1)
+        if is_camera:
+            img = cv2.flip(img, 1)
         frame_count += 1
 
         hand_detections = sign_recognizer.process(img)
@@ -234,10 +250,14 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
                 face_expression = face_data["expression"]
 
         now = time.time()
-        if target_sign and sign_recognizer.is_target_detected(target_sign):
+        target_detected = bool(target_sign and sign_recognizer.is_target_detected(target_sign))
+        if target_detected and not target_active:
             if now - last_target_time >= args.target_cooldown:
                 emit_target_event(target_sign, stable_status)
                 last_target_time = now
+            target_active = True
+        elif not target_detected:
+            target_active = False
 
         if args.print_joints and now - last_print_time >= args.print_interval:
             payload = build_joint_payload(
@@ -271,6 +291,9 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
             print(f"Reached max frames: {args.max_frames}")
             break
 
+    validate_processed_frames(frame_count, is_camera is False)
+    return frame_count
+
 
 def main():
     args = build_args()
@@ -291,7 +314,10 @@ def main():
         
     print("-" * 50)
 
-    sign_recognizer = HandSignRecognizer()
+    sign_recognizer = HandSignRecognizer(
+        combine_two_hands=args.combine_two_hands,
+        use_knn=args.use_knn,
+    )
     face_recognizer = None if args.no_face else FaceExpressionRecognizer()
 
     target_sign = sign_recognizer.normalize_sign(args.target_sign)
@@ -302,7 +328,7 @@ def main():
         sign_recognizer.close()
         if face_recognizer:
             face_recognizer.close()
-        return
+        raise SystemExit(1)
 
     print_startup(target_sign)
     if not args.headless:
@@ -320,4 +346,5 @@ def main():
 
 
 if __name__ == "__main__":
+    handle_non_ascii_path()
     main()

@@ -18,4 +18,7 @@ jobs:
           python-version: "3.10"
 
       - name: Check syntax
-        run: python -m compileall -q main.py arm_detector.py hand_detector.py
+        run: python -m compileall -q main.py core sign_language_app tests
+
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -p "test_*.py"

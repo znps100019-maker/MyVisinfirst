@@ -42,11 +42,11 @@ def handle_non_ascii_path():
         
     virtual_script = os.path.join(drive, relative_script)
     
-    # Check for virtual environment python
-    virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
+    # Keep the interpreter that launched this process when it lives in the
+    # project. A stale .venv launcher can point to a deleted base Python.
+    virtual_python = sys.executable.replace(project_root, drive)
     if not os.path.exists(virtual_python):
-        # Fallback to the executable that started the process, modifying its path if needed
-        virtual_python = sys.executable.replace(project_root, drive)
+        virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
 
     try:
         result = subprocess.run([virtual_python, virtual_script] + sys.argv[1:])

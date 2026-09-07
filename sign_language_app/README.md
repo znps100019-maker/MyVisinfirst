@@ -8,8 +8,8 @@
 3. `downloader.py` - 下載手語影片。預設會下載您指定的 YouTube 手語單元一播放清單，並自動依影片名稱將影片歸類至 `raw_videos/<手語意思>/` 下。
 4. `extract_dataset.py` - 讀取已下載的影片，使用 MediaPipe Hands 擷取手部的 21 個 3D 關節點，進行「平移與縮放歸一化」處理，並打包儲存至 `dataset.json`。
 5. `train_classifier.py` - 讀取 `dataset.json` 特徵，編譯並生成 KNN 分類樣板資料庫 `model.json`。
-6. `recognizer.py` - 載入 `model.json` 樣板庫，開啟相機，實時透過我們手寫的 KNN 演算法進行手語單字預測，並在畫面底部進行連貫手語翻譯。
-7. `video_recognizer.py` - 影片手語辨識工具。支援辨識本機影片或直接以網路影片 URL（如 YouTube 連結）進行串流播放與即時辨識。
+6. `recognizer.py` - 載入 `model.json` 樣板庫，開啟相機，透過 KNN 進行樣板分類。
+7. `video_recognizer.py` - 影片手形分類工具。支援本機影片或網路影片 URL，並輸出時間軸字幕；它不是完整手語句子翻譯器。
 
 ---
 
@@ -72,6 +72,8 @@ python sign_language_app/video_recognizer.py --input sign_language_app/raw_video
 # 2. 辨識網路上的 YouTube 影片（即時串流）
 python sign_language_app/video_recognizer.py --input "https://www.youtube.com/watch?v=nE4kuhO0l3E"
 ```
+
+影片辨識的畫面顯示「手形分類」與「時間一致率」，不把靜態手形直接宣稱為詞義；本機影片另會輸出同名 `.srt` 與 `_timeline.txt`。沒有人工標註時只能報告分類分布與覆蓋率，不能稱為準確率。
 
 ---
 

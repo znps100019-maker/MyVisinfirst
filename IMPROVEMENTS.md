@@ -1,50 +1,29 @@
-# 手勢辨識改善紀錄
+# 手形辨識修正紀錄
 
-## 改善日期
-2026-09-04
+## 實際呼叫流程
 
-## 改善內容
+`main.py` 開啟相機或影片，逐幀呼叫 `core.detectors.hand_detector.HandSignRecognizer.process()`；
+MediaPipe 產生 landmarks 後，先由 `_extended_fingers()` 判定五根手指，再由
+`_classify_sign()` 產生當幀候選，最後由 `_record_candidate()` 與 `stable_status` 處理時間一致率、目標事件與手勢紀錄。
 
-### 1. 調整手指伸直判斷閾值
-- `FINGER_STRAIGHT_THRESHOLD`: 0.82 → 0.55
-- 原因：原閾值太嚴格，導致伸直手指被判斷為彎曲
-- 效果：成功辨識出更多伸直手指
+## 修正與驗證
 
-### 2. 調整手腕延伸比率
-- `FINGER_WRIST_EXTENSION_RATIO`: 1.1 → 0.90
-- 原因：原比率要求太高，手指稍微彎曲就無法通過
-- 效果：更好地判斷手指是否真正延伸
+| 問題案例 | 修改理由與預期結果 | 驗證 |
+| --- | --- | --- |
+| 拇食指靠近的握拳被判 OK | OK 現在必須同時滿足中指、無名指、小指伸直；握拳只會是握拳 | `test_fist_with_thumb_index_close_is_not_ok`、`test_ok_requires_three_other_extended_fingers` |
+| 拇指+食指被判 8 | 移除距離分支；專案定義固定為 7，只有加上中指才是 8 | `test_number_seven_and_eight_follow_project_definition` |
+| 拇指狀態被第二套距離規則覆寫 | 數字分類只使用 `_extended_fingers()` 的拇指結果 | `test_thumb_state_is_not_reinferred_from_distance` |
+| 半彎手指被當伸直 | 加入 PIP/DIP 關節角度、指節直線比例與手腕延伸比例，對遮擋採保守 Unknown | `test_bent_finger_is_not_reported_as_extended` |
+| 不同影像寬高比造成幾何結果不同 | 幾何運算前將 x/z 轉影像寬度、y 轉影像高度；JSON 與繪圖座標不變 | `test_geometry_is_invariant_to_frame_aspect_ratio` |
+| 無手仍沿用舊目標、A/B 切換落後 | stable 狀態以當幀候選為主，無手立即停止目標；連續無手達門檻才重設歷史 | `test_switch_does_not_keep_old_stable_target` |
+| 相同手勢重複紀錄異常 | 長時間無手會重新武裝，單幀掉追蹤不會重複加入手勢紀錄 | `test_long_no_hand_allows_same_sign_to_be_recorded_again`、`test_short_tracking_drop_does_not_duplicate_same_sign` |
+| 雙手被默認合計 | 預設顯示 `Multiple hands` 與各手結果；只有 `--combine-two-hands` 才合計 | `test_two_hands_are_separate_by_default` |
+| 一致率被誤叫信心或準確率 | 畫面標示「時間一致率」與「確認中/已確認」；人工標註才計算 accuracy | `test_one_frame_has_100_percent_consistency_but_is_not_confirmed`、evaluation tests |
 
-### 3. 調整拇指伸直閾值
-- `THUMB_STRAIGHT_THRESHOLD`: 0.86 → 0.65
-- 原因：原閾值對拇指的判斷過於嚴格
-- 效果：更準確地判斷拇指狀態
+## 評估規則
 
-### 4. 提高偵測敏感度
-- `min_detection_confidence`: 0.7 → 0.5
-- `min_tracking_confidence`: 0.6 → 0.4
-- 效果：更容易偵測到手部
+`core.evaluation.evaluate_predictions()` 在沒有人工標註時只回傳分布與覆蓋率；有標註時才回傳逐筆比較的準確率與錯誤清單。空影片、無法開啟的影片與零影格結果會使影片評估失敗。
 
-### 5. 加快穩定判斷
-- `stable_min_count`: 5 → 3
-- 效果：更快確認手勢穩定性
+## 範圍
 
-## 測試結果
-
-### 適合測試的影片
-1. 手語新手教室 第九課（伸直比例 89%）
-2. 手語新手教室 第七課（伸直比例 75%）
-3. 手語新手教室 第八課（伸直比例 73%）
-
-### 成功辨識的手勢
-- Good / Male (Thumbs up)
-- Number 4 (Salute)
-- Number 5 (Hello / Greet)
-- OK (Zero / Can)
-- Number 10 (Two hands)
-
-## 新增工具
-- `test_gesture.sh` - 自動化測試腳本
-- `debug_fingers.py` - 手指偵測調試工具
-- `analyze_finger_curvature.py` - 手指彎曲度分析
-- `quick_video_scan.py` - 快速掃描適合的測試影片
+獨立 KNN 訓練與 `model.json` 格式未修改；KNN 在主程式改為 `--use-knn` 明確啟用。這次修正仍是靜態手形分類，不宣稱完整手語翻譯。

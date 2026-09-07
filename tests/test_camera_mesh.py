@@ -5,7 +5,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import cv2
 
-from hand_detector import HandSignRecognizer
+from core.detectors.hand_detector import HandSignRecognizer
 
 
 def build_args():

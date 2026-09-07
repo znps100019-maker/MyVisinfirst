@@ -1,74 +1,62 @@
-"""測試手勢辨識準確度"""
-import cv2
-import json
-import sys
+"""Optional labelled-video evaluation CLI.
+
+Without --label this reports coverage and distribution only. It never calls
+coverage "accuracy".
+"""
+import argparse
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.path_fix import handle_non_ascii_path
-handle_non_ascii_path()
 
-from collections import Counter
-from core.detectors.hand_detector import HandSignRecognizer
+import cv2
 
-def test_gesture_accuracy(video_path, max_frames=100):
-    """測試手勢辨識準確度"""
+from core.evaluation import evaluate_predictions
+
+
+def evaluate_video(video_path, label=None, max_frames=0):
+    from core.detectors.hand_detector import HandSignRecognizer
+
     cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video: {video_path}")
+
     recognizer = HandSignRecognizer()
-    
-    detected_signs = []
-    stable_signs = []
-    
-    frame_count = 0
-    while frame_count < max_frames:
-        success, img = cap.read()
-        if not success:
-            break
-        
-        img = cv2.flip(img, 1)
-        detections = recognizer.process(img)
-        
-        for detection in detections:
-            detected_signs.append(detection["sign"])
-        
-        stable_sign = recognizer.stable_status["sign"]
-        if stable_sign != "No hand":
-            stable_signs.append(stable_sign)
-        
-        frame_count += 1
-    
-    cap.release()
-    recognizer.close()
-    
-    print("=" * 50)
-    print("手勢辨識準確度測試")
-    print("=" * 50)
-    
-    if detected_signs:
-        print("\n偵測到的手勢分布:")
-        sign_counts = Counter(detected_signs)
-        for sign, count in sign_counts.most_common(10):
-            percentage = count / len(detected_signs) * 100
-            print(f"  {sign}: {count} 次 ({percentage:.1f}%)")
-    
-    if stable_signs:
-        print("\n穩定手勢分布:")
-        stable_counts = Counter(stable_signs)
-        for sign, count in stable_counts.most_common(5):
-            percentage = count / len(stable_signs) * 100
-            print(f"  {sign}: {count} 次 ({percentage:.1f}%)")
-    
-    print(f"\n總共處理幀數: {frame_count}")
-    print(f"偵測到手部的幀數: {len(detected_signs)}")
-    print(f"穩定手勢的幀數: {len(stable_signs)}")
-    
-    # 計算準確度指標
-    if detected_signs:
-        unknown_count = detected_signs.count("Unknown")
-        known_count = len(detected_signs) - unknown_count
-        print(f"\n準確度指標:")
-        print(f"  已知手勢比例: {known_count / len(detected_signs) * 100:.1f}%")
-        print(f"  未知手勢比例: {unknown_count / len(detected_signs) * 100:.1f}%")
+    predictions = []
+    frames = 0
+    try:
+        while max_frames <= 0 or frames < max_frames:
+            success, frame = cap.read()
+            if not success:
+                break
+            detections = recognizer.process(frame)
+            predictions.append(detections[0]["sign"] if detections else "No hand")
+            frames += 1
+    finally:
+        cap.release()
+        recognizer.close()
+
+    if frames == 0:
+        raise RuntimeError(f"Video contains zero readable frames: {video_path}")
+
+    labels = [label] * len(predictions) if label else None
+    return evaluate_predictions(predictions, labels), frames
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate a labelled hand-shape video.")
+    parser.add_argument("--video", required=True, help="Video path.")
+    parser.add_argument("--label", default="", help="Expected label for every readable frame.")
+    parser.add_argument("--max-frames", type=int, default=0)
+    args = parser.parse_args()
+    from utils.path_fix import handle_non_ascii_path
+
+    handle_non_ascii_path()
+    result, frames = evaluate_video(args.video, args.label or None, args.max_frames)
+    print(f"影片: {os.path.basename(args.video)}")
+    print(f"影格數: {frames}")
+    print(f"覆蓋率: {result['coverage']:.1%}")
+    print(f"分布: {result['distribution']}")
+    if result["has_ground_truth"]:
+        print(f"人工標註準確率: {result['accuracy']:.1%}")
+
 
 if __name__ == "__main__":
-    video_path = "sign_language_app/raw_videos_backup/deaf/手語新手教室 第九課：購物、時態｜手語方向｜手語練習環節｜香港手語｜WeTV x 聾場蜜語 [rVdnKYFpQSg].mp4"
-    test_gesture_accuracy(video_path, max_frames=200)
+    main()

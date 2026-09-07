@@ -21,3 +21,4 @@ venv/
 .pip-cache/
 .uv-python/
 sign_language_app/raw_videos/
+sign_language_app/temp_downloads/

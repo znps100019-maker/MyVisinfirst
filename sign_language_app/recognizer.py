@@ -29,9 +29,9 @@ def handle_non_ascii_path():
     subprocess.run(["subst", drive, project_root], shell=True, stdout=subprocess.DEVNULL)
     relative_script = os.path.relpath(os.path.abspath(__file__), project_root)
     virtual_script = os.path.join(drive, relative_script)
-    virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
+    virtual_python = sys.executable.replace(project_root, drive)
     if not os.path.exists(virtual_python):
-        virtual_python = sys.executable.replace(project_root, drive)
+        virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
 
     try:
         result = subprocess.run([virtual_python, virtual_script] + sys.argv[1:])
@@ -49,12 +49,12 @@ import mediapipe as mp
 
 try:
     from knn import classify_knn
-    from labels import display_label
+    from labels import classification_label
     from landmarks import mediapipe_landmarks_to_list, normalize_landmarks
     from text_overlay import draw_panel, draw_text
 except ImportError:
     from sign_language_app.knn import classify_knn
-    from sign_language_app.labels import display_label
+    from sign_language_app.labels import classification_label
     from sign_language_app.landmarks import mediapipe_landmarks_to_list, normalize_landmarks
     from sign_language_app.text_overlay import draw_panel, draw_text
 
@@ -119,10 +119,10 @@ def stable_from_history(history, stable_count):
         return "No hand", 0.0
 
     label, count = Counter(history).most_common(1)[0]
-    confidence = count / len(history)
+    consistency = count / len(history)
     if count < stable_count:
-        return "No hand", confidence
-    return label, confidence
+        return "No hand", consistency
+    return label, consistency
 
 def append_sentence(sentence, last_added_sign, stable_sign):
     if stable_sign == "No hand":
@@ -137,13 +137,13 @@ def draw_sentence(frame, sentence):
         return
 
     height, width, _ = frame.shape
-    text = " -> ".join(display_label(label, include_english=False) for label in sentence)
+    text = " -> ".join(classification_label(label, include_english=False) for label in sentence)
     max_chars = max(12, int(width / 16))
     if len(text) > max_chars:
         text = "..." + text[-max_chars:]
     draw_panel(
         frame,
-        [{"text": f"句子: {text}", "color": (0, 255, 0), "font_size": 24}],
+        [{"text": f"手勢紀錄: {text}", "color": (0, 255, 0), "font_size": 24}],
         origin=(10, height - 58),
         width=width - 20,
         row_height=34,
@@ -163,19 +163,19 @@ def save_srt(segments, srt_path):
         for idx, seg in enumerate(segments, 1):
             start_str = format_srt_time(seg["start_time"])
             end_str = format_srt_time(seg["end_time"])
-            label_text = display_label(seg["label"], include_english=False)
+            label_text = classification_label(seg["label"], include_english=False)
             f.write(f"{idx}\n")
             f.write(f"{start_str} --> {end_str}\n")
             f.write(f"{label_text}\n\n")
 
 def save_timeline_txt(segments, txt_path):
     with open(txt_path, "w", encoding="utf-8") as f:
-        f.write("手語時間軸辨識結果\n")
+        f.write("手形分類時間軸結果\n")
         f.write("=" * 40 + "\n")
         for seg in segments:
             start_str = format_srt_time(seg["start_time"])
             end_str = format_srt_time(seg["end_time"])
-            label_text = display_label(seg["label"], include_english=False)
+            label_text = classification_label(seg["label"], include_english=False)
             f.write(f"[{start_str} -> {end_str}] {label_text}\n")
 
 def main():
@@ -268,7 +268,7 @@ def main():
                     y_pos = max(30, int(min(y_vals) * frame.shape[0]) - 28)
                     draw_text(
                         frame,
-                        f"{display_label(current_sign)} {confidence:.0%}",
+                        f"手形分類: {classification_label(current_sign)}  模型分數 {confidence:.0%}",
                         (x_pos, y_pos),
                         22,
                         (255, 255, 0),
@@ -309,7 +309,7 @@ def main():
                         frame,
                         [
                             {
-                                "text": f"手語: {display_label(stable_sign)}  {stable_confidence:.0%}",
+                                "text": f"手形分類: {classification_label(stable_sign)}  時間一致率 {stable_confidence:.0%}",
                                 "color": (0, 255, 255),
                                 "font_size": 24,
                             }
@@ -352,7 +352,7 @@ def main():
         print("\nRecognition result")
         print("=" * 40)
         if sentence:
-            print(" -> ".join(display_label(label, include_english=False) for label in sentence))
+            print(" -> ".join(classification_label(label, include_english=False) for label in sentence))
         else:
             print("No stable sign was recognized.")
         print("=" * 40)
@@ -373,7 +373,7 @@ def main():
             for seg in segments:
                 start_s = format_srt_time(seg["start_time"])
                 end_s = format_srt_time(seg["end_time"])
-                lbl = display_label(seg["label"], include_english=False)
+                lbl = classification_label(seg["label"], include_english=False)
                 print(f"[{start_s} -> {end_s}] {lbl}")
             print("-" * 40)
 
