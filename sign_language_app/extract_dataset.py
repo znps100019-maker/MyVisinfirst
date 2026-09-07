@@ -34,10 +34,11 @@ def handle_non_ascii_path():
         # Re-build script path on the virtual drive
         relative_script = os.path.relpath(os.path.abspath(__file__), project_root)
         virtual_script = os.path.join(drive, relative_script)
-        virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
-
+        # Prefer the interpreter that launched this process. The checked-in
+        # .venv launcher can point to a deleted base installation.
+        virtual_python = sys.executable.replace(project_root, drive)
         if not os.path.exists(virtual_python):
-            virtual_python = sys.executable.replace(project_root, drive)
+            virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
 
         # Spawn the child process on the virtual drive
         args = [virtual_python, virtual_script] + sys.argv[1:]

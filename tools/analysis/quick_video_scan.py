@@ -1,107 +1,78 @@
-"""快速掃描多個影片，找出有伸直手指的影片"""
-import cv2
-import math
-import glob
-import os
-from hand_detector import HandSignRecognizer
+"""快速掃描影片，統計偵測到的手部與伸直手指比例。"""
+from __future__ import annotations
 
-def analyze_video(video_path, sample_frames=20):
-    """快速分析影片中的手指狀態"""
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import cv2
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from core.detectors.hand_detector import HandSignRecognizer
+
+
+def analyze_video(video_path: str, sample_frames: int = 20) -> dict:
     cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise OSError(f"無法開啟影片：{video_path}")
+
     recognizer = HandSignRecognizer()
-    
-    straight_count = 0
-    curved_count = 0
     total_hands = 0
-    
-    frame_count = 0
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    # 取樣間隔
-    if total_frames > sample_frames:
-        interval = total_frames // sample_frames
-    else:
-        interval = 1
-    
-    while frame_count < total_frames:
-        success, img = cap.read()
-        if not success:
-            break
-        
-        # 只處理特定幀
-        if frame_count % interval == 0:
-            img = cv2.flip(img, 1)
-            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            rgb.flags.writeable = False
-            results = recognizer.hands.process(rgb)
-            
-            if results.multi_hand_landmarks:
-                for landmarks in results.multi_hand_landmarks:
-                    points = landmarks.landmark
+    straight_fingers = 0
+    frames_read = 0
+    try:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        interval = max(1, total_frames // max(sample_frames, 1))
+        while True:
+            success, frame = cap.read()
+            if not success:
+                break
+            if frames_read % interval == 0:
+                detections = recognizer.process(frame)
+                for detection in detections:
                     total_hands += 1
-                    
-                    # 分析手指角度
-                    angles = []
-                    for finger in ["index", "middle", "ring", "pinky"]:
-                        base_idx = recognizer.FINGER_MCPS[finger]
-                        mcp = points[base_idx]
-                        pip = points[base_idx + 1]
-                        dip = points[base_idx + 2]
-                        
-                        a = recognizer._distance(mcp, pip)
-                        b = recognizer._distance(pip, dip)
-                        c = recognizer._distance(mcp, dip)
-                        
-                        if a > 0.001 and b > 0.001:
-                            cos_angle = (a**2 + b**2 - c**2) / (2 * a * b)
-                            cos_angle = max(-1, min(1, cos_angle))
-                            angle = math.degrees(math.acos(cos_angle))
-                            angles.append(angle)
-                    
-                    if angles:
-                        avg_angle = sum(angles) / len(angles)
-                        if avg_angle > 120:
-                            straight_count += 1
-                        else:
-                            curved_count += 1
-        
-        frame_count += 1
-    
-    cap.release()
-    recognizer.close()
-    
+                    straight_fingers += sum(detection["fingers"].values())
+            frames_read += 1
+    finally:
+        cap.release()
+        recognizer.close()
+
+    if frames_read == 0:
+        raise ValueError(f"影片沒有可讀取的影格：{video_path}")
     return {
         "video": os.path.basename(video_path),
-        "total_hands": total_hands,
-        "straight": straight_count,
-        "curved": curved_count,
-        "straight_ratio": straight_count / max(total_hands, 1)
+        "frames_read": frames_read,
+        "hands": total_hands,
+        "straight_fingers": straight_fingers,
+        "straight_ratio": straight_fingers / max(total_hands * 5, 1),
     }
 
-# 掃描所有影片
-video_files = glob.glob("sign_language_app/raw_videos_backup/deaf/*.mp4")
-print(f"找到 {len(video_files)} 個影片檔案\n")
-print("=" * 80)
 
-results = []
-for video in video_files:
-    try:
-        result = analyze_video(video, sample_frames=15)
-        results.append(result)
-        print(f"影片: {result['video'][:50]}...")
-        print(f"  偵測到手: {result['total_hands']} 次")
-        print(f"  伸直: {result['straight']} 次 ({result['straight_ratio']*100:.0f}%)")
-        print(f"  彎曲: {result['curved']} 次")
-        print("-" * 40)
-    except Exception as e:
-        print(f"影片: {os.path.basename(video)[:50]}...")
-        print(f"  錯誤: {e}")
-        print("-" * 40)
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("videos", nargs="+", help="要掃描的影片路徑")
+    parser.add_argument("--sample-frames", type=int, default=20)
+    args = parser.parse_args()
 
-# 排序找出最適合的影片
-if results:
-    results.sort(key=lambda x: x["straight_ratio"], reverse=True)
-    print("\n" + "=" * 80)
-    print("最適合測試的影片（依伸直手指比例排序）:")
-    for i, result in enumerate(results[:3], 1):
-        print(f"{i}. {result['video']} (伸直比例: {result['straight_ratio']*100:.0f}%)")
+    failed = False
+    for video_path in args.videos:
+        try:
+            result = analyze_video(video_path, args.sample_frames)
+        except (OSError, ValueError) as exc:
+            print(f"錯誤：{exc}", file=sys.stderr)
+            failed = True
+            continue
+        print(
+            f"{result['video']}: 讀取 {result['frames_read']} 幀，"
+            f"偵測手部 {result['hands']} 次，"
+            f"伸直手指比例 {result['straight_ratio']:.1%}"
+        )
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

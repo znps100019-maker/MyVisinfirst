@@ -66,7 +66,7 @@ python main.py
    {
      "timestamp": 1780641234.56,
      "stable_sign": "Thumbs up",
-     "stable": {"sign": "Thumbs up", "is_stable": true, "confidence": 1.0},
+     "stable": {"sign": "Good / Male (Thumbs up)", "is_stable": true, "consistency": 1.0},
      "face_expression": "Smiling",
      "target_sign": "",
      "target_detected": false,
@@ -92,7 +92,7 @@ python main.py
    ```
    *目標命中輸出：*
    ```json
-   {"event": "target_detected", "timestamp": 1780641250.12, "target_sign": "Fist", "stable": {"sign": "Fist", "is_stable": true, "confidence": 1.0}}
+    {"event": "target_detected", "timestamp": 1780641250.12, "target_sign": "Fist", "stable": {"sign": "Fist (Solidarity)", "is_stable": true, "consistency": 1.0}}
    ```
 
 5. **關閉臉部表情偵測（--no-face）**：
@@ -151,4 +151,4 @@ python main.py
 
 *   **`q` 鍵**：安全結束程式、釋放鏡頭資源並關閉視窗（亦可直接點擊視窗右上角「X」安全關閉）。
 *   **`f` 鍵**：開啟/關閉臉上的科技感 3D 藍色網格線（隱藏藍色網格線以利看清臉部表情，此時背景依然會持續進行表情偵測，並在左上角 HUD 框中顯示偵測結果）。
-*   **`c` 鍵**：清除底部目前已偵測並串接的連貫性手語語句（Sentence）。
+*   **`c` 鍵**：清除底部目前已確認的手勢紀錄。

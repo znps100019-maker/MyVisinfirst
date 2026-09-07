@@ -7,6 +7,7 @@ from core.evaluation import evaluate_predictions
 from core.detectors.hand_detector import HandSignRecognizer
 from main import validate_processed_frames
 from sign_language_app.labels import classification_label
+from sign_language_app.recognizer import stable_from_history
 
 
 def point(x, y, z=0.0):
@@ -166,6 +167,12 @@ class StateRegressionTests(unittest.TestCase):
             "thumb": True, "index": True, "middle": True, "ring": True, "pinky": True,
         }
         self.assertEqual(recognizer._frame_candidate(detections), "Number 6 (Two hands)")
+
+    def test_knn_runtime_uses_current_candidate_instead_of_old_vote(self):
+        history = deque(["Number 2 (Victory)", "Number 2 (Victory)", "Number 3"])
+        sign, consistency = stable_from_history(history, 2, "Number 3")
+        self.assertEqual(sign, "No hand")
+        self.assertAlmostEqual(consistency, 1 / 3)
 
 
 class EvaluationRegressionTests(unittest.TestCase):

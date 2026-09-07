@@ -291,7 +291,7 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
             print(f"Reached max frames: {args.max_frames}")
             break
 
-    validate_processed_frames(frame_count, is_camera is False)
+    validate_processed_frames(frame_count, not is_camera)
     return frame_count
 
 

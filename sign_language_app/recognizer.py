@@ -41,9 +41,6 @@ def handle_non_ascii_path():
 
     sys.exit(returncode)
 
-# Run bypass check immediately
-handle_non_ascii_path()
-
 import cv2
 import mediapipe as mp
 
@@ -114,13 +111,19 @@ def get_stream_url(video_input):
             print(f"Cannot open YouTube video: {exc}")
             sys.exit(1)
 
-def stable_from_history(history, stable_count):
+def stable_from_history(history, stable_count, current_label=None):
     if not history:
         return "No hand", 0.0
 
-    label, count = Counter(history).most_common(1)[0]
+    label = current_label or Counter(history).most_common(1)[0][0]
+    count = sum(item == label for item in history)
     consistency = count / len(history)
-    if count < stable_count:
+    trailing = 0
+    for item in reversed(history):
+        if item != label:
+            break
+        trailing += 1
+    if label == "No hand" or count < stable_count or trailing < stable_count:
         return "No hand", consistency
     return label, consistency
 
@@ -219,13 +222,14 @@ def main():
     history = deque(maxlen=args.history_size)
     sentence = []
     last_added_sign = None
+    no_hand_streak = 0
 
     frame_idx = 0
     segments = []
     active_segment = None
 
     print(f"Loaded model: {model_path} ({len(samples)} samples)")
-    print("Press q to quit. Press c to clear the sentence.")
+    print("Press q to quit. Press c to clear the gesture history.")
     if not args.headless:
         cv2.namedWindow("Sign Language Recognition", cv2.WINDOW_NORMAL)
 
@@ -273,11 +277,21 @@ def main():
                         22,
                         (255, 255, 0),
                     )
+                if no_hand_streak >= 3:
+                    history.clear()
+                no_hand_streak = 0
                 history.append(current_sign)
             else:
+                no_hand_streak += 1
                 history.append("No hand")
+                if no_hand_streak >= 3:
+                    history.clear()
+                    history.append("No hand")
+                    last_added_sign = None
 
-            stable_sign, stable_confidence = stable_from_history(history, args.stable_count)
+            stable_sign, stable_consistency = stable_from_history(
+                history, args.stable_count, current_sign
+            )
             last_added_sign = append_sentence(sentence, last_added_sign, stable_sign)
 
             # Segment tracking for timeline generation (video only)
@@ -309,7 +323,7 @@ def main():
                         frame,
                         [
                             {
-                                "text": f"手形分類: {classification_label(stable_sign)}  時間一致率 {stable_confidence:.0%}",
+                                "text": f"手形分類: {classification_label(stable_sign)}  時間一致率 {stable_consistency:.0%}",
                                 "color": (0, 255, 255),
                                 "font_size": 24,
                             }
@@ -387,5 +401,9 @@ def main():
                 save_timeline_txt(segments, txt_path)
                 print(f"Timeline transcript saved to: {txt_path}")
 
+    if not is_camera and frame_idx == 0:
+        raise SystemExit("Video opened but contained zero readable frames.")
+
 if __name__ == "__main__":
+    handle_non_ascii_path()
     main()

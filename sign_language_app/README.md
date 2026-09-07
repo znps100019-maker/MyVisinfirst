@@ -4,12 +4,10 @@
 
 ## 📂 目錄檔案說明
 1. `requirements.txt` - 本子專案所需的相依套件清單。
-2. `crawler.py` - 詞庫影片爬蟲。連線「臺灣手語詞庫」API 下載全部 519 個詞彙影片，並歸類至 `raw_videos/<手語詞彙>/`。
-3. `downloader.py` - 下載手語影片。預設會下載您指定的 YouTube 手語單元一播放清單，並自動依影片名稱將影片歸類至 `raw_videos/<手語意思>/` 下。
-4. `extract_dataset.py` - 讀取已下載的影片，使用 MediaPipe Hands 擷取手部的 21 個 3D 關節點，進行「平移與縮放歸一化」處理，並打包儲存至 `dataset.json`。
-5. `train_classifier.py` - 讀取 `dataset.json` 特徵，編譯並生成 KNN 分類樣板資料庫 `model.json`。
-6. `recognizer.py` - 載入 `model.json` 樣板庫，開啟相機，透過 KNN 進行樣板分類。
-7. `video_recognizer.py` - 影片手形分類工具。支援本機影片或網路影片 URL，並輸出時間軸字幕；它不是完整手語句子翻譯器。
+2. `downloader.py` - 影片下載工具。支援臺灣手語詞庫 (`idl`) 與 YouTube (`youtube`) 模式，並依名稱分類至 `raw_videos/<手語意思>/`。
+3. `extract_dataset.py` - 讀取已下載的影片，使用 MediaPipe Hands 擷取手部的 21 個 3D 關節點，進行「平移與縮放歸一化」處理，並打包儲存至 `dataset.json`。
+4. `train_classifier.py` - 讀取 `dataset.json` 特徵，編譯並生成 KNN 分類樣板資料庫 `model.json`。
+5. `recognizer.py` - 相機、影片與 YouTube URL 的手形分類工具；影片模式會輸出時間軸字幕。它不是完整手語句子翻譯器。
 
 ---
 
@@ -29,10 +27,10 @@ pip install -r sign_language_app/requirements.txt
 
 ### 步驟 2：下載手語影片 (二選一)
 
-**選項 A：下載「臺灣手語詞庫」全部 519 個詞彙影片 (推薦)**
-執行以下指令，透過爬蟲下載所有詞庫影片：
+**選項 A：下載「臺灣手語詞庫」影片 (推薦)**
+執行以下指令，透過下載器取得詞庫影片：
 ```powershell
-python sign_language_app/crawler.py
+python sign_language_app/downloader.py --mode idl
 ```
 
 **選項 B：下載 YouTube 教學播放清單影片**
@@ -61,16 +59,16 @@ python sign_language_app/recognizer.py
 ```
 * **鍵盤快捷鍵**：
   - 按鍵盤 **`q` 鍵** 或點選視窗右上角「X」：安全退出程式。
-  - 按鍵盤 **`c` 鍵**：清空底部已串接的連貫手語語句。
+  - 按鍵盤 **`c` 鍵**：清空底部已串接的手勢紀錄。
 
 ### 步驟 6：辨識本機影片或網路上的手語影片
-您可以傳入本機影片檔案路徑，或者**直接傳入 YouTube 網址**，程式會流暢進行影片播放並顯示偵測骨骼與翻譯：
+您可以傳入本機影片檔案路徑，或者**直接傳入 YouTube 網址**，程式會播放影片並顯示手形分類：
 ```powershell
 # 1. 辨識本機下載的手語影片
-python sign_language_app/video_recognizer.py --input sign_language_app/raw_videos/hello/xxxx.mp4
+python sign_language_app/recognizer.py --input sign_language_app/raw_videos/hello/xxxx.mp4
 
 # 2. 辨識網路上的 YouTube 影片（即時串流）
-python sign_language_app/video_recognizer.py --input "https://www.youtube.com/watch?v=nE4kuhO0l3E"
+python sign_language_app/recognizer.py --input "https://www.youtube.com/watch?v=nE4kuhO0l3E"
 ```
 
 影片辨識的畫面顯示「手形分類」與「時間一致率」，不把靜態手形直接宣稱為詞義；本機影片另會輸出同名 `.srt` 與 `_timeline.txt`。沒有人工標註時只能報告分類分布與覆蓋率，不能稱為準確率。
