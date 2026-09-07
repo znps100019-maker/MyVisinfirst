@@ -1,8 +1,11 @@
 import argparse
+import ctypes
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -42,13 +45,26 @@ def handle_non_ascii_path():
         virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
 
     args = [virtual_python, virtual_script] + sys.argv[1:]
+    child_env = os.environ.copy()
+    # MediaPipe resolves graph files from sys.path. Remap environment paths as
+    # well, otherwise PYTHONPATH can keep pointing to the non-ASCII C: path.
+    for variable in ("PYTHONPATH", "PATH", "VIRTUAL_ENV", "PYTHONHOME"):
+        value = child_env.get(variable)
+        if value:
+            child_env[variable] = value.replace(project_root, drive)
     try:
-        result = subprocess.run(args)
+        result = subprocess.run(args, env=child_env)
         returncode = result.returncode
     finally:
         subprocess.run(["subst", drive, "/d"], shell=True, stdout=subprocess.DEVNULL)
 
     sys.exit(returncode)
+
+
+# This must run before importing MediaPipe. MediaPipe builds its resource root
+# from the imported module path, so remapping afterwards is too late.
+if __name__ == "__main__":
+    handle_non_ascii_path()
 
 
 import cv2
@@ -57,11 +73,88 @@ from core.detectors.face_detector import FaceExpressionRecognizer
 from core.detectors.hand_detector import HandSignRecognizer
 
 
+def _ascii_path(path):
+    """Return an ASCII Windows path when the filesystem supports short names."""
+    if all(ord(char) < 128 for char in path):
+        return path
+    if sys.platform == "win32":
+        try:
+            get_short_path = ctypes.windll.kernel32.GetShortPathNameW
+            get_short_path.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+            get_short_path.restype = ctypes.c_uint32
+            buffer = ctypes.create_unicode_buffer(32768)
+            length = get_short_path(path, buffer, len(buffer))
+            if length and all(ord(char) < 128 for char in buffer.value):
+                return buffer.value
+        except (AttributeError, OSError):
+            pass
+    return os.path.join(os.environ.get("SystemDrive", "C:"), "mv_mediapipe_resources")
+
+
+def prepare_mediapipe_resources():
+    """Make MediaPipe graph/model resources readable from an ASCII path.
+
+    MediaPipe derives its resource directory from solution_base.__file__. On
+    Windows, some installations fail to open that path when the project lives
+    under a non-ASCII OneDrive directory. Copying only the package resources
+    keeps the installed Python code unchanged while fixing graph loading.
+    """
+    import mediapipe.python.solution_base as solution_base
+
+    source_file = os.path.abspath(solution_base.__file__)
+    source_site_packages = os.path.dirname(
+        os.path.dirname(os.path.dirname(source_file))
+    )
+    if all(ord(char) < 128 for char in source_file):
+        return source_site_packages
+
+    target_site_packages = _ascii_path(
+        os.path.join(tempfile.gettempdir(), "myvisinfirst_mediapipe")
+    )
+    source_modules = os.path.join(source_site_packages, "mediapipe", "modules")
+    target_modules = os.path.join(target_site_packages, "mediapipe", "modules")
+    required_hand_graph = os.path.join(
+        target_modules, "hand_landmark", "hand_landmark_tracking_cpu.binarypb"
+    )
+    if not os.path.exists(required_hand_graph):
+        if not os.path.isdir(source_modules):
+            raise FileNotFoundError(f"找不到 MediaPipe 模型資源：{source_modules}")
+        os.makedirs(os.path.dirname(target_modules), exist_ok=True)
+        shutil.copytree(source_modules, target_modules, dirs_exist_ok=True)
+
+    fake_solution_file = os.path.join(
+        target_site_packages, "mediapipe", "python", "solution_base.py"
+    )
+    os.makedirs(os.path.dirname(fake_solution_file), exist_ok=True)
+    solution_base.__file__ = fake_solution_file
+    return target_site_packages
+
+
 def build_args():
-    parser = argparse.ArgumentParser(description="Hand joint and sign detection.")
+    parser = argparse.ArgumentParser(
+        description="Unified camera, local-video, and YouTube hand-sign detection."
+    )
+    parser.add_argument(
+        "source",
+        nargs="?",
+        default="",
+        help="Optional local video path or YouTube URL. Omit it to use the camera.",
+    )
     parser.add_argument("--camera", type=int, default=0, help="Camera index.")
     parser.add_argument("--width", type=int, default=0, help="Optional camera width.")
     parser.add_argument("--height", type=int, default=0, help="Optional camera height.")
+    parser.add_argument(
+        "--window-width", type=int, default=1280,
+        help="Display window width in pixels.",
+    )
+    parser.add_argument(
+        "--window-height", type=int, default=720,
+        help="Display window height in pixels.",
+    )
+    parser.add_argument(
+        "--fullscreen", action="store_true",
+        help="Show the camera detection window in fullscreen mode.",
+    )
     parser.add_argument("--headless", action="store_true", help="Run without a window.")
     parser.add_argument(
         "--print-joints",
@@ -110,11 +203,40 @@ def build_args():
         help="Disable facial expression detection.",
     )
     parser.add_argument(
-        "--video",
+        "--video", "--input",
+        dest="video",
         default="",
         help="Local video path or YouTube URL to process instead of camera.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--stream-mode",
+        choices=("download", "stream"),
+        default="download",
+        help="YouTube mode: download locally for stability or use a live stream URL.",
+    )
+    args = parser.parse_args()
+    if args.source and args.video:
+        parser.error("只能使用位置參數或 --video/--input 其中一種影片來源")
+    if args.source:
+        args.video = args.source
+    return args
+
+
+def resolve_interactive_source(args, input_func=input):
+    """Ask for an optional video only in an interactive terminal.
+
+    An empty answer intentionally keeps ``args.video`` empty, which means the
+    main loop opens the camera and detects the person in front of it.
+    """
+    if args.video or not sys.stdin.isatty():
+        return args
+    print("-" * 50)
+    video_input = input_func(
+        "請貼上影片/YouTube 連結；直接按 Enter 開啟攝像頭做人員偵測："
+    ).strip()
+    if video_input:
+        args.video = video_input
+    return args
 
 
 def build_joint_payload(hand_detections, stable_status, target_sign, face_expression=None):
@@ -150,6 +272,35 @@ def configure_camera(cap, args):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
 
 
+def open_camera_source(camera_index):
+    """Open a camera and verify that it can provide at least one frame."""
+    backends = [("DirectShow", cv2.CAP_DSHOW)]
+    media_foundation = getattr(cv2, "CAP_MSMF", cv2.CAP_ANY)
+    if media_foundation not in (cv2.CAP_DSHOW, cv2.CAP_ANY):
+        backends.append(("Media Foundation", media_foundation))
+    if cv2.CAP_ANY not in (cv2.CAP_DSHOW, media_foundation):
+        backends.append(("default", cv2.CAP_ANY))
+
+    for backend_name, backend in backends:
+        print(f"正在開啟攝像頭 {camera_index} ({backend_name})...", flush=True)
+        cap = cv2.VideoCapture(camera_index, backend)
+        if not cap.isOpened():
+            cap.release()
+            continue
+        success, _ = cap.read()
+        if success:
+            print(f"攝像頭 {camera_index} 已開啟。", flush=True)
+            return cap
+        cap.release()
+
+    print(
+        f"攝像頭 {camera_index} 已被找到但無法讀取影像。"
+        "請確認 Windows 相機權限，並關閉其他使用攝像頭的程式。",
+        flush=True,
+    )
+    return None
+
+
 def open_video_source(args):
     if getattr(args, 'video', None):
         video_input = args.video
@@ -161,8 +312,7 @@ def open_video_source(args):
                 "no_warnings": True,
             }
             
-            mode = getattr(args, 'stream_mode', '2')
-            if mode == '1':
+            if args.stream_mode == "stream":
                 print("正在取得影片串流連結，請稍候...")
                 with yt_dlp.YoutubeDL(options) as ydl:
                     try:
@@ -186,8 +336,18 @@ def open_video_source(args):
                         
         cap = cv2.VideoCapture(video_input)
     else:
-        cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
-        configure_camera(cap, args)
+        camera_indices = [args.camera]
+        # A USB camera or virtual camera is often exposed as index 1+.
+        # Keep an explicit non-zero --camera request limited to that index.
+        if args.camera == 0:
+            camera_indices.extend([1, 2, 3])
+        for camera_index in camera_indices:
+            cap = open_camera_source(camera_index)
+            if cap is not None:
+                configure_camera(cap, args)
+                args.camera = camera_index
+                return cap
+        return cv2.VideoCapture()
     return cap
 
 
@@ -296,35 +456,41 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
 
 
 def main():
-    args = build_args()
+    args = resolve_interactive_source(build_args())
 
-    # 互動式輸入網址功能
-    if not args.video:
-        print("-" * 50)
-        url_input = input("請貼上 YouTube 或其他網路影片連結 (或直接按 Enter 鍵開啟攝影機): ").strip()
-        if url_input:
-            args.video = url_input
-
-    # 選擇串流或下載模式
-    if args.video and args.video.startswith(("http://", "https://")):
-        mode = input("請問要 (1) 即時串流 還是 (2) 下載後穩定播放？[預設 2]: ").strip()
-        args.stream_mode = mode if mode in ["1", "2"] else "2"
-    else:
-        args.stream_mode = "1"
-        
     print("-" * 50)
+    if args.video:
+        print(f"輸入來源：{args.video}", flush=True)
+    else:
+        print(f"輸入來源：攝像頭 {args.camera}", flush=True)
+    print("正在初始化 MediaPipe 手部辨識...", flush=True)
 
-    sign_recognizer = HandSignRecognizer(
-        combine_two_hands=args.combine_two_hands,
-        use_knn=args.use_knn,
-    )
-    face_recognizer = None if args.no_face else FaceExpressionRecognizer()
+    try:
+        resource_root = prepare_mediapipe_resources()
+        if resource_root:
+            print(f"MediaPipe 資源路徑：{resource_root}", flush=True)
+        sign_recognizer = HandSignRecognizer(
+            combine_two_hands=args.combine_two_hands,
+            use_knn=args.use_knn,
+        )
+        face_recognizer = None if args.no_face else FaceExpressionRecognizer()
+    except Exception as exc:
+        print(f"辨識器初始化失敗：{type(exc).__name__}: {exc}", flush=True)
+        raise SystemExit(1)
+    print("MediaPipe 初始化完成。", flush=True)
 
     target_sign = sign_recognizer.normalize_sign(args.target_sign)
 
     cap = open_video_source(args)
     if not cap.isOpened():
-        print("Cannot open camera or video file. Check permission or path.")
+        if args.video:
+            print(f"Cannot open video source: {args.video}")
+        else:
+            print(
+                f"Cannot open camera index {args.camera}. "
+                "Check Windows camera permission, that another app is not using it, "
+                "or try --camera 1."
+            )
         sign_recognizer.close()
         if face_recognizer:
             face_recognizer.close()
@@ -332,7 +498,26 @@ def main():
 
     print_startup(target_sign)
     if not args.headless:
-        cv2.namedWindow("Hand Control - Main", cv2.WINDOW_NORMAL)
+        try:
+            cv2.namedWindow("Hand Control - Main", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(
+                "Hand Control - Main",
+                max(640, args.window_width),
+                max(480, args.window_height),
+            )
+            if args.fullscreen:
+                cv2.setWindowProperty(
+                    "Hand Control - Main",
+                    cv2.WND_PROP_FULLSCREEN,
+                    cv2.WINDOW_FULLSCREEN,
+                )
+        except cv2.error as exc:
+            print(f"無法建立即時影像視窗：{exc}", flush=True)
+            cap.release()
+            sign_recognizer.close()
+            if face_recognizer:
+                face_recognizer.close()
+            raise SystemExit(1)
 
     try:
         process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
@@ -346,5 +531,4 @@ def main():
 
 
 if __name__ == "__main__":
-    handle_non_ascii_path()
     main()

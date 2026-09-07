@@ -40,10 +40,15 @@ def handle_non_ascii_path():
         if not os.path.exists(virtual_python):
             virtual_python = os.path.join(drive, ".venv", "Scripts", "python.exe")
 
+        child_env = os.environ.copy()
+        for variable in ("PYTHONPATH", "PATH", "VIRTUAL_ENV", "PYTHONHOME"):
+            value = child_env.get(variable)
+            if value:
+                child_env[variable] = value.replace(project_root, drive)
         # Spawn the child process on the virtual drive
         args = [virtual_python, virtual_script] + sys.argv[1:]
         try:
-            result = subprocess.run(args)
+            result = subprocess.run(args, env=child_env)
             returncode = result.returncode
         finally:
             subprocess.run(["subst", drive, "/d"], shell=True, stdout=subprocess.DEVNULL)

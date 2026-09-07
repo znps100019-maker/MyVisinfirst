@@ -35,12 +35,26 @@
 
 ## 執行方式
 
-您可以直接使用 Python 來執行主程式，不需要透過複雜的啟動腳本：
+所有即時辨識入口都集中在 `main.py`，不需要先執行其他辨識腳本：
 
 ```powershell
-# 直接啟動主程式（開啟影像視窗與相機）
+# 不帶參數：出現提示後直接按 Enter，開啟預設攝像頭做人員偵測
 python main.py
+
+# 直接辨識本機影片
+python main.py path/to/video.mp4
+
+# 直接辨識 YouTube 影片（預設先下載再辨識）
+python main.py --video "https://www.youtube.com/watch?v=nE4kuhO0l3E"
 ```
+
+執行 `python main.py` 後，若直接按 Enter，程式會使用攝像頭偵測鏡頭前的人；只有貼上影片路徑或 YouTube URL 才會進入影片辨識。請從 PowerShell 或命令提示字元執行，這樣可以看到攝像頭初始化與錯誤訊息；不要直接雙擊 `main.py`。如果預設攝像頭 0 無法開啟，可以嘗試：
+
+```powershell
+python main.py --camera 1
+```
+
+若仍無法開啟，請到 Windows「設定 → 隱私權與安全性 → 相機」允許桌面應用程式使用相機，並關閉 Teams、Zoom 或其他正在使用相機的程式。
 
 ### 💡 實用啟動引數參數 (Arguments)
 
@@ -56,7 +70,24 @@ python main.py
    python main.py --width 640 --height 480
    ```
 
-3. **無畫面模式（Headless）與輸出關節 JSON 數據**：
+3. **調整即時顯示視窗大小**：
+   ```powershell
+   python main.py --window-width 1280 --window-height 720
+
+   # 或直接使用全螢幕
+   python main.py --fullscreen
+   ```
+
+4. **指定 YouTube 處理方式**：
+   ```powershell
+   # 下載後播放，較穩定
+   python main.py --video "https://www.youtube.com/watch?v=nE4kuhO0l3E" --stream-mode download
+
+   # 直接使用線上串流
+   python main.py --video "https://www.youtube.com/watch?v=nE4kuhO0l3E" --stream-mode stream
+   ```
+
+5. **無畫面模式（Headless）與輸出關節 JSON 數據**：
    如果您想在背景執行，將偵測到的手部 21 個關節點與穩定手勢輸出給其他程式或終端機讀取：
    ```powershell
    python main.py --headless --print-joints --print-interval 0.5
@@ -85,7 +116,7 @@ python main.py
    }
    ```
 
-4. **指定目標手勢判定（Target Sign）**：
+6. **指定目標手勢判定（Target Sign）**：
    當辨識到特定手勢且達到穩定影格數時，觸發目標事件輸出：
    ```powershell
    python main.py --target-sign "Fist"
@@ -95,7 +126,7 @@ python main.py
     {"event": "target_detected", "timestamp": 1780641250.12, "target_sign": "Fist", "stable": {"sign": "Fist (Solidarity)", "is_stable": true, "consistency": 1.0}}
    ```
 
-5. **關閉臉部表情偵測（--no-face）**：
+7. **關閉臉部表情偵測（--no-face）**：
    如果您只想單獨執行手勢辨識以節省系統 CPU 運算資源，可以加入此參數關閉臉部表情偵測：
    ```powershell
    python main.py --no-face
