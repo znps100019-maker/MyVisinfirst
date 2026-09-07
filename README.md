@@ -157,13 +157,13 @@ python main.py --camera 1
 *   `Unknown` (未知手勢)
 
 ### 2. 雙手辨識
-預設兩隻手分開顯示各自分類，不自動合計。只有加入 `--combine-two-hands` 才會累加雙手伸直的手指總數，支援以下累加數字：
+從 `main.py` 啟動時預設啟用雙手合併模式，會累加雙手伸直的手指總數，支援以下累加數字：
 *   `Number 6 (Two hands)` (雙手伸直手指總數為 6，例如：5 指 + 1 指)
 *   `Number 7 (Two hands)` (雙手伸直手指總數為 7，例如：5 指 + 2 指)
 *   `Number 8 (Two hands)` (雙手伸直手指總數為 8，例如：5 指 + 3 指)
 *   `Number 9 (Two hands)` (雙手伸直手指總數為 9，例如：5 指 + 4 指)
 *   `Number 10 (Two hands)` (雙手伸直手指總數為 10，即雙手五指全開)
-*   *備註：若雙手手指總數小於 6，將會顯示 `"Two hands (X fingers)"`。*
+*   *備註：若雙手手指總數小於 6，將會顯示 `"Two hands (X fingers)"`。需要分開顯示時，請使用 `--separate-hands`。*
 
 ### 3. 臉部表情辨識 (Facial Expression)
 系統支援偵測以下臉部特徵與表情狀態：

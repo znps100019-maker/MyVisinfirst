@@ -187,10 +187,19 @@ def build_args():
         default=1.0,
         help="Seconds between repeated target-detected events.",
     )
-    parser.add_argument(
+    hand_mode = parser.add_mutually_exclusive_group()
+    hand_mode.add_argument(
         "--combine-two-hands",
+        dest="combine_two_hands",
         action="store_true",
-        help="Explicitly sum both hands into a number. Default keeps each hand separate.",
+        default=True,
+        help="Combine both hands into one number (default).",
+    )
+    hand_mode.add_argument(
+        "--separate-hands",
+        dest="combine_two_hands",
+        action="store_false",
+        help="Keep two hands as separate hand classifications.",
     )
     parser.add_argument(
         "--use-knn",
@@ -357,6 +366,7 @@ def print_startup(target_sign):
     print("  - Press 'q' to quit.")
     print("  - Press 'f' to toggle face mesh blue lines show/hide.")
     print("  - Press 'c' to clear current gesture history.")
+    print("  - Two-hand combine mode: enabled.")
     if target_sign:
         print(f"Target sign: {target_sign}")
 
@@ -464,6 +474,10 @@ def main():
     else:
         print(f"輸入來源：攝像頭 {args.camera}", flush=True)
     print("正在初始化 MediaPipe 手部辨識...", flush=True)
+    print(
+        "雙手合併模式：啟用" if args.combine_two_hands else "雙手合併模式：停用",
+        flush=True,
+    )
 
     try:
         resource_root = prepare_mediapipe_resources()

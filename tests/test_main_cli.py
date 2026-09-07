@@ -15,6 +15,7 @@ class MainCliTests(unittest.TestCase):
         self.assertEqual(args.stream_mode, "download")
         self.assertEqual(args.window_width, 1280)
         self.assertEqual(args.window_height, 720)
+        self.assertTrue(args.combine_two_hands)
 
     def test_positional_source_is_supported(self):
         with patch.object(sys, "argv", ["main.py", "sample.mp4"]):
@@ -32,6 +33,12 @@ class MainCliTests(unittest.TestCase):
 
         self.assertEqual(args.video, "https://example.test/video")
         self.assertEqual(args.stream_mode, "stream")
+
+    def test_separate_hands_can_disable_default_combine_mode(self):
+        with patch.object(sys, "argv", ["main.py", "--separate-hands"]):
+            args = main.build_args()
+
+        self.assertFalse(args.combine_two_hands)
 
     def test_empty_interactive_input_keeps_camera_mode(self):
         with patch.object(sys, "argv", ["main.py"]):
