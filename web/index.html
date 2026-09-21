@@ -3,198 +3,469 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 台灣手語即時辨識系統 | 專題展示網頁</title>
+  <title>AI 台灣手語專屬互動學習與即時測驗系統</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
   <!-- MediaPipe Hands CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div class="app-container">
-    <!-- 頂部導航與標題 -->
+    <!-- 頂部主導航列 -->
     <header class="app-header">
       <div class="logo-group">
         <div class="logo-icon">🤟</div>
         <div class="logo-text">
-          <h1>AI 台灣手語即時辨識系統</h1>
-          <p class="subtitle">雙手 126 維空間特徵 × KNN 機器學習引擎</p>
+          <h1>AI 台灣手語專屬互動學習系統</h1>
+          <p class="subtitle">即時手語辨識 × 互動手語教室 × AI 闖關測驗評分平台</p>
         </div>
       </div>
+      
+      <!-- 主功能分頁導航 -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="tab-recognition">
+          <span class="tab-icon">🧪</span>
+          <span>即時辨識實驗室</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-classroom">
+          <span class="tab-icon">🎓</span>
+          <span>手語教室</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-quiz">
+          <span class="tab-icon">🏆</span>
+          <span>AI 測驗闖關</span>
+          <span class="nav-badge">HOT</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-dictionary">
+          <span class="tab-icon">📖</span>
+          <span>519 詞彙大字典</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-stats">
+          <span class="tab-icon">📊</span>
+          <span>學習歷程</span>
+        </button>
+      </nav>
+
       <div class="header-badges">
         <div class="status-badge" id="modelStatusBadge">
           <span class="status-dot pulsing"></span>
           <span class="status-label">模型載入中...</span>
         </div>
-        <div class="info-badge">
-          <span class="badge-icon">📚</span>
-          <span class="badge-text" id="vocabCountBadge">519 手語詞彙</span>
-        </div>
-        <div class="info-badge">
-          <span class="badge-icon">⚡</span>
-          <span class="badge-text">純前端邊緣運算</span>
-        </div>
       </div>
     </header>
 
-    <!-- 主要工作區：左右雙欄佈局 -->
-    <main class="main-dashboard">
-      <!-- 左側：偵測過程 (Detection Process) -->
-      <section class="panel-column process-column">
-        <div class="panel-header">
-          <div class="panel-title-group">
-            <span class="panel-badge">PROCESS</span>
-            <h2>即時偵測過程 (Detection Process)</h2>
-          </div>
-          <div class="stream-stats">
-            <span class="stat-pill"><strong id="fpsVal">0</strong> FPS</span>
-            <span class="stat-pill"><strong id="latencyVal">0</strong> ms 延遲</span>
-          </div>
-        </div>
-
-        <!-- 視訊視窗與骨架畫布 -->
-        <div class="viewport-wrapper">
+    <!-- 共用頂部攝影機視窗與浮動狀態區 (所有分頁共用即時鏡頭) -->
+    <div class="shared-camera-dock">
+      <div class="dock-viewport-container">
+        <div class="dock-viewport">
           <video id="webcamVideo" playsinline muted></video>
           <canvas id="outputCanvas"></canvas>
           <div class="viewport-overlay" id="loadingOverlay">
             <div class="spinner"></div>
-            <p id="loadingMsg">正在啟動 MediaPipe 手部追蹤模型...</p>
+            <p id="loadingMsg">正在載入 519 詞彙模型與 MediaPipe 關節追蹤...</p>
           </div>
           <div class="tracking-hud" id="trackingHud">
             <span class="hud-pill" id="handCountHud">未偵測到手部</span>
             <span class="hud-pill" id="landmarkConfHud">手部關節追蹤中</span>
+            <span class="hud-pill stat-pill"><strong id="fpsVal">0</strong> FPS</span>
+            <span class="hud-pill stat-pill"><strong id="latencyVal">0</strong> ms</span>
           </div>
         </div>
-
-        <!-- 輸入來源與控制列 -->
-        <div class="control-toolbar">
-          <button class="btn btn-primary" id="toggleCameraBtn">
+        <div class="dock-controls">
+          <button class="btn btn-primary btn-sm" id="toggleCameraBtn">
             <span class="btn-icon">📷</span> <span id="toggleCameraText">啟動攝影機</span>
           </button>
-          <button class="btn btn-secondary" id="flipMirrorBtn" title="鏡像水平翻轉">
+          <button class="btn btn-secondary btn-sm" id="flipMirrorBtn" title="鏡像翻轉">
             <span class="btn-icon">🪞</span> 鏡像翻轉
           </button>
-          <label class="btn btn-secondary upload-label">
-            <span class="btn-icon">📁</span> 選擇影片測試
+          <label class="btn btn-secondary btn-sm upload-label">
+            <span class="btn-icon">📁</span> 上傳影片
             <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
           </label>
         </div>
+      </div>
 
-        <!-- 偵測過程透視：KNN Top-K 鄰近候選透視表 -->
-        <div class="card process-card">
-          <div class="card-header">
-            <h3>🔬 KNN 演算法決策透視 (Top-9 鄰近候選比對)</h3>
-            <span class="info-tag">126 維歐式距離加權</span>
+      <!-- 即時偵測結果迷你速覽列 -->
+      <div class="dock-summary-card">
+        <div class="dock-summary-header">
+          <span class="summary-label">當前即時辨識判定</span>
+          <span class="stability-tag unconfirmed" id="dockStabilityTag">確認中</span>
+        </div>
+        <div class="dock-word-display" id="dockSignWord">請比出手語...</div>
+        <div class="dock-confidence-row">
+          <span class="dock-conf-label">模型信心度: <strong id="dockConfidence">0%</strong></span>
+          <div class="confidence-bar-bg mini">
+            <div class="confidence-bar-fill" id="dockConfBarFill" style="width: 0%;"></div>
           </div>
-          <div class="card-body">
-            <div class="table-responsive">
-              <table class="knn-table">
-                <thead>
-                  <tr>
-                    <th>排名</th>
-                    <th>候選詞彙</th>
-                    <th>空間距離</th>
-                    <th>投票權重比</th>
-                  </tr>
-                </thead>
-                <tbody id="knnTableBody">
-                  <tr><td colspan="4" class="empty-hint">等待手部進入畫面...</td></tr>
-                </tbody>
-              </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分頁內容區域 -->
+    <main class="tab-contents-container">
+
+      <!-- ==================== 分頁 1: 即時辨識實驗室 ==================== -->
+      <section class="tab-content active" id="tab-recognition">
+        <div class="dashboard-grid">
+          <!-- 偵測過程 (Detection Process) -->
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div class="panel-title">
+                <span class="panel-badge">PROCESS</span>
+                <h3>即時偵測過程分析 (Detection Process)</h3>
+              </div>
+              <span class="info-tag">126 維歐式距離加權</span>
             </div>
-          </div>
-        </div>
+            <div class="panel-card-body">
+              <!-- KNN Top-9 候選透視表 -->
+              <h4 class="sub-section-title">🔬 KNN 演算法候選比對透視 (Top-9 鄰近候選)</h4>
+              <div class="table-responsive">
+                <table class="knn-table">
+                  <thead>
+                    <tr>
+                      <th>排名</th>
+                      <th>候選詞彙</th>
+                      <th>特徵空間距離</th>
+                      <th>加權投票比重</th>
+                    </tr>
+                  </thead>
+                  <tbody id="knnTableBody">
+                    <tr><td colspan="4" class="empty-hint">等待手部進入畫面...</td></tr>
+                  </tbody>
+                </table>
+              </div>
 
-        <!-- 偵測過程透視：手指關節伸展狀態 -->
-        <div class="card process-card">
-          <div class="card-header">
-            <h3>🖐️ 手指伸展即時姿態 (Finger States)</h3>
-            <span class="info-tag">幾何關節角分析</span>
-          </div>
-          <div class="card-body">
-            <div class="finger-status-grid" id="fingerStatusGrid">
-              <div class="finger-chip" id="fingerThumb"><span class="chip-name">拇指</span><span class="chip-state">-</span></div>
-              <div class="finger-chip" id="fingerIndex"><span class="chip-name">食指</span><span class="chip-state">-</span></div>
-              <div class="finger-chip" id="fingerMiddle"><span class="chip-name">中指</span><span class="chip-state">-</span></div>
-              <div class="finger-chip" id="fingerRing"><span class="chip-name">無名指</span><span class="chip-state">-</span></div>
-              <div class="finger-chip" id="fingerPinky"><span class="chip-name">小指</span><span class="chip-state">-</span></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 右側：偵測結果 (Detection Results) -->
-      <section class="panel-column results-column">
-        <div class="panel-header">
-          <div class="panel-title-group">
-            <span class="panel-badge result-badge">RESULTS</span>
-            <h2>辨識結果展示 (Detection Results)</h2>
-          </div>
-          <div class="result-status-indicator" id="decisionStatus">
-            <span class="status-icon">⏳</span> 等待手勢
-          </div>
-        </div>
-
-        <!-- 主結果展示卡片 (Hero Result Card) -->
-        <div class="hero-result-card">
-          <div class="hero-label">當前手語辨識目標</div>
-          <div class="hero-word-display" id="heroSignWord">準備中...</div>
-          <div class="hero-metrics">
-            <div class="metric-item">
-              <span class="metric-title">模型信心度</span>
-              <div class="metric-value-group">
-                <div class="confidence-bar-bg">
-                  <div class="confidence-bar-fill" id="confBarFill" style="width: 0%;"></div>
-                </div>
-                <span class="metric-number" id="heroConfidence">0%</span>
+              <!-- 五指姿態即時狀態 -->
+              <h4 class="sub-section-title" style="margin-top: 18px;">🖐️ 手指伸展即時姿態 (Finger States)</h4>
+              <div class="finger-status-grid">
+                <div class="finger-chip" id="fingerThumb"><span class="chip-name">拇指</span><span class="chip-state">-</span></div>
+                <div class="finger-chip" id="fingerIndex"><span class="chip-name">食指</span><span class="chip-state">-</span></div>
+                <div class="finger-chip" id="fingerMiddle"><span class="chip-name">中指</span><span class="chip-state">-</span></div>
+                <div class="finger-chip" id="fingerRing"><span class="chip-name">無名指</span><span class="chip-state">-</span></div>
+                <div class="finger-chip" id="fingerPinky"><span class="chip-name">小指</span><span class="chip-state">-</span></div>
               </div>
             </div>
-            <div class="metric-item">
-              <span class="metric-title">時間一致性狀態</span>
-              <span class="stability-tag unconfirmed" id="stabilityTag">確認中</span>
-            </div>
           </div>
-        </div>
 
-        <!-- 連續手語語句時間軸 (Sentence Timeline) -->
-        <div class="card sentence-card">
-          <div class="card-header">
-            <h3>📝 手語語句累積串接 (Sentence Builder)</h3>
-            <div class="card-actions">
-              <button class="btn btn-xs" id="copySentenceBtn" title="複製句子">📋 複製</button>
-              <button class="btn btn-xs btn-danger" id="clearSentenceBtn" title="清除紀錄">🗑️ 清除</button>
+          <!-- 偵測結果 (Detection Results) -->
+          <div class="panel-card">
+            <div class="panel-card-header">
+              <div class="panel-title">
+                <span class="panel-badge result-badge">RESULTS</span>
+                <h3>手語語句與辨識結果 (Detection Results)</h3>
+              </div>
+              <div class="result-status-indicator" id="decisionStatus">
+                <span class="status-icon">⏳</span> 等待手勢
+              </div>
             </div>
-          </div>
-          <div class="card-body">
-            <div class="sentence-box" id="sentenceContainer">
-              <span class="placeholder-text">比出穩定手勢後，系統會自動將單字組裝為語句...</span>
-            </div>
-          </div>
-        </div>
+            <div class="panel-card-body">
+              <!-- 主結果醒目看板 -->
+              <div class="hero-result-card">
+                <div class="hero-label">當前手語辨識目標</div>
+                <div class="hero-word-display" id="heroSignWord">請比出手語...</div>
+                <div class="hero-metrics">
+                  <div class="metric-item">
+                    <span class="metric-title">模型信心度</span>
+                    <div class="metric-value-group">
+                      <div class="confidence-bar-bg">
+                        <div class="confidence-bar-fill" id="confBarFill" style="width: 0%;"></div>
+                      </div>
+                      <span class="metric-number" id="heroConfidence">0%</span>
+                    </div>
+                  </div>
+                  <div class="metric-item">
+                    <span class="metric-title">時間一致性狀態</span>
+                    <span class="stability-tag unconfirmed" id="stabilityTag">確認中</span>
+                  </div>
+                </div>
+              </div>
 
-        <!-- 519 詞彙字典查詢器 -->
-        <div class="card vocab-card">
-          <div class="card-header">
-            <h3>📖 資料庫支援詞彙速查 (519 詞庫)</h3>
-            <input type="text" id="vocabSearchInput" class="search-input" placeholder="搜尋手語單字...">
-          </div>
-          <div class="card-body vocab-body">
-            <div class="vocab-chips-container" id="vocabContainer">
-              <div class="loading-sub">載入詞庫中...</div>
+              <!-- 手語語句累積時間軸 -->
+              <div class="sentence-box-wrapper" style="margin-top: 20px;">
+                <div class="sentence-box-header">
+                  <h4>📝 手語語句自動累積 (Sentence Builder)</h4>
+                  <div class="card-actions">
+                    <button class="btn btn-xs" id="copySentenceBtn" title="複製句子">📋 複製語句</button>
+                    <button class="btn btn-xs btn-danger" id="clearSentenceBtn" title="清除紀錄">🗑️ 清除</button>
+                  </div>
+                </div>
+                <div class="sentence-box" id="sentenceContainer">
+                  <span class="placeholder-text">比出穩定手勢後，系統會自動將單字組裝為語句...</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="card-footer">
-            <span id="vocabMatchCount">顯示 519 個詞彙</span>
           </div>
         </div>
       </section>
+
+      <!-- ==================== 分頁 2: 手語教室 (Learning Classroom) ==================== -->
+      <section class="tab-content" id="tab-classroom">
+        <div class="classroom-layout">
+          <!-- 左側：教學分類與卡片庫 -->
+          <div class="classroom-catalog">
+            <div class="catalog-header">
+              <h3>📚 手語主題單元</h3>
+              <div class="category-pills">
+                <button class="cat-pill active" data-cat="all">全部單元</button>
+                <button class="cat-pill" data-cat="numbers">數字篇 (1~10)</button>
+                <button class="cat-pill" data-cat="greetings">常用問候</button>
+                <button class="cat-pill" data-cat="daily">生活用語</button>
+                <button class="cat-pill" data-cat="emotions">情緒與感受</button>
+              </div>
+            </div>
+            <div class="lesson-cards-grid" id="lessonCardsContainer">
+              <!-- 動態產生手語教學卡片 -->
+            </div>
+          </div>
+
+          <!-- 右側：即時互動練習面板 (跟我做) -->
+          <div class="practice-stage">
+            <div class="practice-card">
+              <div class="practice-card-header">
+                <span class="stage-tag">AI 互動練習</span>
+                <h3>跟我一起比 (Live Practice)</h3>
+              </div>
+              <div class="practice-card-body">
+                <div class="practice-target-box">
+                  <span class="practice-target-label">當前練習目標：</span>
+                  <div class="practice-target-word" id="practiceTargetWord">數字 1</div>
+                  <p class="practice-target-hint" id="practiceTargetHint">請伸出食指，其餘手指握拳。</p>
+                </div>
+
+                <div class="practice-feedback-box" id="practiceFeedbackBox">
+                  <div class="feedback-icon" id="feedbackIcon">🎯</div>
+                  <div class="feedback-text">
+                    <h4 id="feedbackTitle">請在鏡頭前比出指定手語</h4>
+                    <p id="feedbackDesc">系統正透過 126 維度空間座標比對您的手部姿態...</p>
+                  </div>
+                </div>
+
+                <div class="practice-meter">
+                  <div class="meter-label">
+                    <span>動作匹配吻合度</span>
+                    <strong id="practiceMatchPercent">0%</strong>
+                  </div>
+                  <div class="confidence-bar-bg">
+                    <div class="confidence-bar-fill" id="practiceMatchBar" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <button class="btn btn-primary btn-block" id="nextLessonBtn">
+                  學習下一個單字 ➔
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 分頁 3: AI 測驗闖關 (Quiz & Challenge) ==================== -->
+      <section class="tab-content" id="tab-quiz">
+        <div class="quiz-container">
+          <!-- 測驗未開始畫面 -->
+          <div class="quiz-lobby" id="quizLobby">
+            <div class="lobby-card">
+              <div class="lobby-badge">CHALLENGE MODE</div>
+              <h2>AI 台灣手語即時闖關測驗</h2>
+              <p class="lobby-desc">考驗您的手語反應速度！每題有 10 秒倒數計時，請在鏡頭前比出題目所要求的手語單字，AI 辨識無誤即過關並獲得積分加成！</p>
+              
+              <div class="quiz-features">
+                <div class="feature-box">
+                  <span class="feature-icon">⏱️</span>
+                  <h4>10 秒倒數計時</h4>
+                  <p>考驗手勢熟練度與瞬間反應</p>
+                </div>
+                <div class="feature-box">
+                  <span class="feature-icon">🔥</span>
+                  <h4>Combo 連擊加成</h4>
+                  <p>連續答對觸發高額獎勵倍率</p>
+                </div>
+                <div class="feature-box">
+                  <span class="feature-icon">🤖</span>
+                  <h4>AI 即時手勢核對</h4>
+                  <p>126 維 KNN 模型客觀評分</p>
+                </div>
+              </div>
+
+              <div class="quiz-settings">
+                <label>選擇測驗題數：</label>
+                <select id="quizCountSelect" class="quiz-select">
+                  <option value="5">5 題 (快速體驗)</option>
+                  <option value="10" selected>10 題 (標準闖關)</option>
+                  <option value="20">20 題 (大師挑戰)</option>
+                </select>
+              </div>
+
+              <button class="btn btn-primary btn-large" id="startQuizBtn">
+                開始手語測驗 🚀
+              </button>
+            </div>
+          </div>
+
+          <!-- 測驗進行中畫面 -->
+          <div class="quiz-active-arena" id="quizArena" style="display: none;">
+            <div class="arena-header">
+              <div class="arena-stat">
+                <span class="stat-label">題目進度</span>
+                <span class="stat-num"><strong id="quizCurrentQ">1</strong> / <span id="quizTotalQ">10</span></span>
+              </div>
+              <div class="arena-stat">
+                <span class="stat-label">目前得分</span>
+                <span class="stat-num score-num" id="quizCurrentScore">0</span>
+              </div>
+              <div class="arena-stat">
+                <span class="stat-label">連擊 (Combo)</span>
+                <div class="combo-badge" id="quizComboBadge">🔥 x0</div>
+              </div>
+              <button class="btn btn-secondary btn-xs" id="abandonQuizBtn">放棄測驗</button>
+            </div>
+
+            <!-- 題目主展示卡 -->
+            <div class="quiz-prompt-card">
+              <div class="timer-bar-wrapper">
+                <div class="timer-bar-fill" id="timerBarFill" style="width: 100%;"></div>
+              </div>
+              <div class="prompt-header">
+                <span class="prompt-badge">請比出手語</span>
+                <span class="timer-text" id="timerText">10.0s</span>
+              </div>
+              <div class="prompt-target-word" id="quizTargetWord">準備中...</div>
+              <p class="prompt-target-hint" id="quizTargetHint">鏡頭偵測中，請比出相應手勢並保持穩定...</p>
+            </div>
+
+            <!-- 即時答題反饋條 -->
+            <div class="quiz-live-feedback" id="quizLiveFeedback">
+              <div class="feedback-row">
+                <span>AI 目前辨識：<strong id="quizCurrentSeen">辨識中...</strong></span>
+                <span>匹配吻合度：<strong id="quizCurrentConf">0%</strong></span>
+              </div>
+              <div class="confidence-bar-bg">
+                <div class="confidence-bar-fill" id="quizMatchingBar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 測驗結算畫面 -->
+          <div class="quiz-summary-modal" id="quizSummaryModal" style="display: none;">
+            <div class="summary-card">
+              <div class="summary-trophy" id="summaryTrophy">🏆</div>
+              <h2 id="summaryGrade">成績結算：A+ 大師等級</h2>
+              <div class="summary-score-banner">
+                <span class="final-score-title">最終總得分</span>
+                <div class="final-score-num" id="summaryFinalScore">850</div>
+              </div>
+              <div class="summary-stats-grid">
+                <div class="summary-stat-box">
+                  <span class="s-label">答對題數</span>
+                  <span class="s-val" id="summaryCorrectCount">9 / 10</span>
+                </div>
+                <div class="summary-stat-box">
+                  <span class="s-label">整體正確率</span>
+                  <span class="s-val" id="summaryAccuracy">90%</span>
+                </div>
+                <div class="summary-stat-box">
+                  <span class="s-label">最高連擊</span>
+                  <span class="s-val" id="summaryMaxCombo">🔥 5</span>
+                </div>
+              </div>
+              <div class="summary-actions">
+                <button class="btn btn-primary" id="retryQuizBtn">再測驗一次 🔄</button>
+                <button class="btn btn-secondary" id="viewStatsBtn">檢視學習歷程 📊</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 分頁 4: 519 詞彙大字典 ==================== -->
+      <section class="tab-content" id="tab-dictionary">
+        <div class="dictionary-view">
+          <div class="dictionary-toolbar">
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="dictSearchInput" placeholder="搜尋 519 個手語詞彙 (支援中文、數字)...">
+            </div>
+            <div class="dict-stats-label">
+              <span id="dictResultCount">顯示 519 個手語詞彙</span>
+            </div>
+          </div>
+
+          <div class="dictionary-grid" id="dictionaryGrid">
+            <!-- 動態填充 519 詞彙卡片 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 分頁 5: 學習歷程與統計 ==================== -->
+      <section class="tab-content" id="tab-stats">
+        <div class="stats-dashboard">
+          <div class="stats-overview-cards">
+            <div class="overview-card">
+              <div class="overview-icon">🎯</div>
+              <div class="overview-data">
+                <span class="overview-title">累計測驗次數</span>
+                <span class="overview-num" id="statsTotalQuizzes">0</span>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-icon">⭐</div>
+              <div class="overview-data">
+                <span class="overview-title">歷史最高得分</span>
+                <span class="overview-num" id="statsHighScore">0</span>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-icon">🏆</div>
+              <div class="overview-data">
+                <span class="overview-title">平均答對率</span>
+                <span class="overview-num" id="statsAvgAccuracy">0%</span>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-icon">📖</div>
+              <div class="overview-data">
+                <span class="overview-title">已掌握手語單字</span>
+                <span class="overview-num" id="statsMasteredWords">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 歷史測驗紀錄列表 -->
+          <div class="panel-card" style="margin-top: 24px;">
+            <div class="panel-card-header">
+              <h3>📜 歷史闖關紀錄 (Quiz History)</h3>
+              <button class="btn btn-xs btn-danger" id="clearStatsBtn">清空歷程紀錄</button>
+            </div>
+            <div class="panel-card-body">
+              <div class="table-responsive">
+                <table class="knn-table">
+                  <thead>
+                    <tr>
+                      <th>測驗日期時間</th>
+                      <th>測驗題數</th>
+                      <th>得分</th>
+                      <th>正確率</th>
+                      <th>等級評價</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyTableBody">
+                    <tr><td colspan="5" class="empty-hint">尚無測驗紀錄，前往「AI 測驗闖關」開始你的第一次挑戰！</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
 
-    <!-- 底部說明 -->
+    <!-- 底部聲明 -->
     <footer class="app-footer">
-      <p>MyVisinfirst 手語視覺辨識專題展示系統 ｜ 採用 MediaPipe Hands 關節點追蹤 ＆ 126 維 KNN 相對座標演算法</p>
+      <p>MyVisinfirst 手語視覺專題展示系統 ｜ 採用 MediaPipe Hands 關節點追蹤 ＆ 126 維 KNN 相對空間演算法 ｜ 支援 519 種台灣手語詞彙</p>
     </footer>
   </div>
 
