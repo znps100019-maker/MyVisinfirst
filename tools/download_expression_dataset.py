@@ -9,6 +9,11 @@ import os
 import sys
 import urllib.request
 
+# 確保專案根目錄加入 sys.path
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
 # 確保 Windows cp950 終端機正常輸出中文與 emoji
 if hasattr(sys.stdout, "reconfigure"):
     try:

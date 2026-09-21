@@ -8,9 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
-  <!-- MediaPipe Hands CDN -->
+  <!-- MediaPipe Hands & FaceMesh CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div class="app-container">
@@ -76,6 +77,7 @@
           </div>
           <div class="tracking-hud" id="trackingHud">
             <span class="hud-pill" id="handCountHud">未偵測到手部</span>
+            <span class="hud-pill" id="faceEmotionHud">🎭 臉部表情: 😐 平靜</span>
             <span class="hud-pill" id="landmarkConfHud">手部關節追蹤中</span>
             <span class="hud-pill stat-pill"><strong id="fpsVal">0</strong> FPS</span>
             <span class="hud-pill stat-pill"><strong id="latencyVal">0</strong> ms</span>
@@ -84,6 +86,9 @@
         <div class="dock-controls">
           <button class="btn btn-primary btn-sm" id="toggleCameraBtn">
             <span class="btn-icon">📷</span> <span id="toggleCameraText">啟動攝影機</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" id="toggleFaceMeshBtn" title="開啟或關閉臉部表情辨識">
+            <span class="btn-icon">🎭</span> 表情辨識: <span id="faceMeshStatusText">開啟</span>
           </button>
           <button class="btn btn-secondary btn-sm" id="flipMirrorBtn" title="鏡像翻轉">
             <span class="btn-icon">🪞</span> 鏡像翻轉
@@ -172,6 +177,73 @@
                 <div class="finger-chip" id="fingerMiddle"><span class="chip-name">中指</span><span class="chip-state">-</span></div>
                 <div class="finger-chip" id="fingerRing"><span class="chip-name">無名指</span><span class="chip-state">-</span></div>
                 <div class="finger-chip" id="fingerPinky"><span class="chip-name">小指</span><span class="chip-state">-</span></div>
+              </div>
+
+              <!-- 臉部表情辨識透視 (喜怒哀樂 FACS & NMS) -->
+              <h4 class="sub-section-title" style="margin-top: 22px;">🎭 臉部表情與幾何特徵透視 (喜怒哀樂 NMS)</h4>
+              <div class="emotion-dashboard">
+                <div class="emotion-hero-row">
+                  <div class="emotion-hero-badge" id="emotionHeroBadge">
+                    <span class="emotion-hero-emoji" id="emotionHeroEmoji">😐</span>
+                    <div class="emotion-hero-text">
+                      <span class="emotion-hero-name" id="emotionHeroName">平靜 (Neutral)</span>
+                      <span class="emotion-hero-sub" id="emotionHeroSub">AU0 自然放鬆姿態</span>
+                    </div>
+                  </div>
+                  <div class="emotion-micro-pill" id="emotionMicroPill">微表情: 正常雙眼</div>
+                </div>
+
+                <div class="emotion-bars-container">
+                  <div class="e-bar-row" data-emotion="xi">
+                    <div class="e-bar-header">
+                      <span class="e-bar-name">😊 喜 (Joy / 微笑)</span>
+                      <span class="e-bar-val" id="valEmotionXi">0%</span>
+                    </div>
+                    <div class="e-bar-track">
+                      <div class="e-bar-fill xi" id="fillEmotionXi" style="width: 0%;"></div>
+                    </div>
+                  </div>
+
+                  <div class="e-bar-row" data-emotion="nu">
+                    <div class="e-bar-header">
+                      <span class="e-bar-name">😠 怒 (Anger / 蹙眉)</span>
+                      <span class="e-bar-val" id="valEmotionNu">0%</span>
+                    </div>
+                    <div class="e-bar-track">
+                      <div class="e-bar-fill nu" id="fillEmotionNu" style="width: 0%;"></div>
+                    </div>
+                  </div>
+
+                  <div class="e-bar-row" data-emotion="ai">
+                    <div class="e-bar-header">
+                      <span class="e-bar-name">😢 哀 (Sadness / 悲哀)</span>
+                      <span class="e-bar-val" id="valEmotionAi">0%</span>
+                    </div>
+                    <div class="e-bar-track">
+                      <div class="e-bar-fill ai" id="fillEmotionAi" style="width: 0%;"></div>
+                    </div>
+                  </div>
+
+                  <div class="e-bar-row" data-emotion="le">
+                    <div class="e-bar-header">
+                      <span class="e-bar-name">😄 樂 (Delight / 歡笑)</span>
+                      <span class="e-bar-val" id="valEmotionLe">0%</span>
+                    </div>
+                    <div class="e-bar-track">
+                      <div class="e-bar-fill le" id="fillEmotionLe" style="width: 0%;"></div>
+                    </div>
+                  </div>
+
+                  <div class="e-bar-row" data-emotion="neutral">
+                    <div class="e-bar-header">
+                      <span class="e-bar-name">😐 平靜 (Neutral / 基準)</span>
+                      <span class="e-bar-val" id="valEmotionNeutral">100%</span>
+                    </div>
+                    <div class="e-bar-track">
+                      <div class="e-bar-fill neutral" id="fillEmotionNeutral" style="width: 100%;"></div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

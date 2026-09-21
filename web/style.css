@@ -1811,6 +1811,167 @@ body::before {
   font-size: 1.1rem;
 }
 
+/* ================= 臉部表情辨識面板 (喜怒哀樂 NMS) ================= */
+.emotion-dashboard {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.emotion-hero-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.emotion-hero-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  transition: all 0.25s ease;
+}
+
+.emotion-hero-badge.emotion-xi {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
+}
+
+.emotion-hero-badge.emotion-nu {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+.emotion-hero-badge.emotion-ai {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+
+.emotion-hero-badge.emotion-le {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+.emotion-hero-emoji {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.emotion-hero-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.emotion-hero-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.emotion-hero-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.emotion-micro-pill {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--cyan-accent);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.emotion-bars-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.e-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.e-bar-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.e-bar-name {
+  color: var(--text-muted);
+}
+
+.e-bar-val {
+  font-family: var(--font-mono);
+  color: #ffffff;
+}
+
+.e-bar-track {
+  height: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.e-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+
+.e-bar-fill.xi {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.e-bar-fill.nu {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.e-bar-fill.ai {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+.e-bar-fill.le {
+  background: linear-gradient(90deg, #10b981, #34d399);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.e-bar-fill.neutral {
+  background: linear-gradient(90deg, #64748b, #94a3b8);
+}
+
+/* FaceMesh HUD Pill */
+#faceEmotionHud {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+}
+
+/* Lesson card emotion styling */
+.lesson-card[data-category="emotions"] .lesson-word {
+  color: #fbbf24;
+}
+
 /* 底部聲明 */
 .app-footer {
   text-align: center;

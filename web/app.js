@@ -12,6 +12,20 @@ let isCameraRunning = false;
 let isMirror = true;
 let camera = null;
 let handsDetector = null;
+let faceMeshDetector = null;
+let isFaceMeshEnabled = true;
+let latestFaceLandmarks = null;
+let currentFaceEmotion = {
+  emotion: '平靜',
+  label: '😐 平靜 (Neutral)',
+  confidence: 0.85,
+  scores: { '喜': 0, '怒': 0, '哀': 0, '樂': 0, '平靜': 0.32 },
+  microAction: '',
+  emoji: '😐',
+  en: 'Neutral'
+};
+let faceEmotionHistory = [];
+let lastStableEmotion = '平靜';
 
 // 效能與時間統計
 let lastFrameTime = performance.now();
@@ -113,6 +127,27 @@ const latencyVal = document.getElementById('latencyVal');
 const handCountHud = document.getElementById('handCountHud');
 const landmarkConfHud = document.getElementById('landmarkConfHud');
 
+const faceEmotionHud = document.getElementById('faceEmotionHud');
+const toggleFaceMeshBtn = document.getElementById('toggleFaceMeshBtn');
+const faceMeshStatusText = document.getElementById('faceMeshStatusText');
+
+// 臉部表情儀表板 DOM
+const emotionHeroBadge = document.getElementById('emotionHeroBadge');
+const emotionHeroEmoji = document.getElementById('emotionHeroEmoji');
+const emotionHeroName = document.getElementById('emotionHeroName');
+const emotionHeroSub = document.getElementById('emotionHeroSub');
+const emotionMicroPill = document.getElementById('emotionMicroPill');
+const valEmotionXi = document.getElementById('valEmotionXi');
+const fillEmotionXi = document.getElementById('fillEmotionXi');
+const valEmotionNu = document.getElementById('valEmotionNu');
+const fillEmotionNu = document.getElementById('fillEmotionNu');
+const valEmotionAi = document.getElementById('valEmotionAi');
+const fillEmotionAi = document.getElementById('fillEmotionAi');
+const valEmotionLe = document.getElementById('valEmotionLe');
+const fillEmotionLe = document.getElementById('fillEmotionLe');
+const valEmotionNeutral = document.getElementById('valEmotionNeutral');
+const fillEmotionNeutral = document.getElementById('fillEmotionNeutral');
+
 // 分頁 1 元素
 const knnTableBody = document.getElementById('knnTableBody');
 const heroSignWord = document.getElementById('heroSignWord');
@@ -204,6 +239,10 @@ const CLASSROOM_LESSONS = [
   { word: '一模一樣', name: '一模一樣', category: 'daily', hint: '雙手食指水平相對平行移動。' },
   { word: '喜歡', name: '喜歡', category: 'emotions', hint: '右手張開置於胸前，輕撫心臟處。' },
   { word: '享受', name: '享受', category: 'emotions', hint: '雙手輕撫兩頰或胸口，神情陶醉。' },
+  { word: '喜', name: '喜 (微笑/愉悅)', category: 'emotions', hint: '嘴角自然向上揚起，眼神放鬆微瞇，呈現喜悅微笑了然的神態（非手勢表情信號）。', isEmotion: true },
+  { word: '怒', name: '怒 (皺眉/憤怒)', category: 'emotions', hint: '雙眉緊縮深蹙，眉毛下壓，雙眼微瞪，呈現憤怒專注之神態。', isEmotion: true },
+  { word: '哀', name: '哀 (難過/悲傷)', category: 'emotions', hint: '嘴角向下撇垂，眉毛內角微提，眼神落寞悲哀。', isEmotion: true },
+  { word: '樂', name: '樂 (大笑/歡樂)', category: 'emotions', hint: '嘴巴張開大笑，嘴角顯著上揚，眉開眼笑，呈現開懷歡樂之強烈表情。', isEmotion: true },
   { word: '互相幫忙', name: '互相幫忙', category: 'daily', hint: '雙手手心相對，向對方微微靠攏推進。' }
 ];
 
@@ -370,6 +409,327 @@ function detectFingerStates(handLandmarks) {
   return { thumb: thumbExt, index: indexExt, middle: middleExt, ring: ringExt, pinky: pinkyExt };
 }
 
+// ===================== 4-B. 臉部表情辨識 (喜怒哀樂幾何分析 FACS & NMS) =====================
+function classifyFacialEmotion(landmarks) {
+  if (!landmarks || landmarks.length < 468) return null;
+
+  const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y, (p1.z || 0) - (p2.z || 0));
+
+  function eyeAspectRatio(p_in, p_top1, p_top2, p_out, p_bot1, p_bot2) {
+    const v1 = dist(landmarks[p_top1], landmarks[p_bot2]);
+    const v2 = dist(landmarks[p_top2], landmarks[p_bot1]);
+    const h = dist(landmarks[p_in], landmarks[p_out]);
+    return (v1 + v2) / (2.0 * Math.max(h, 1e-4));
+  }
+
+  // 1. 眼睛長寬比 (EAR)
+  const leftEar = eyeAspectRatio(362, 385, 386, 263, 374, 380);
+  const rightEar = eyeAspectRatio(33, 159, 158, 133, 145, 153);
+  const isLeftClosed = leftEar < 0.19;
+  const isRightClosed = rightEar < 0.19;
+  const isBlink = isLeftClosed && isRightClosed;
+
+  // 2. 尺度基準
+  const dEyes = Math.max(dist(landmarks[33], landmarks[263]), 0.001);
+  const dFaceHeight = Math.max(dist(landmarks[10], landmarks[152]), 0.001);
+
+  // 3. 嘴部幾何特徵 (AU12, AU25, AU15)
+  const dMouth = dist(landmarks[61], landmarks[291]);
+  const smileRatio = dMouth / dEyes;
+
+  const dInnerMouth = dist(landmarks[13], landmarks[14]);
+  const mouthRatio = dInnerMouth / dFaceHeight;
+
+  const mouthCenterY = (landmarks[13].y + landmarks[14].y) / 2.0;
+  const cornersY = (landmarks[61].y + landmarks[291].y) / 2.0;
+  const cornerElevation = (mouthCenterY - cornersY) / dEyes;
+
+  // 4. 眉毛幾何特徵 (AU4 蹙眉, AU1 內眉抬高)
+  const dBrowInner = dist(landmarks[107], landmarks[336]) / dEyes;
+  const browEyeR = dist(landmarks[107], landmarks[133]) / dEyes;
+  const browEyeL = dist(landmarks[336], landmarks[362]) / dEyes;
+  const avgBrowEyeDist = (browEyeR + browEyeL) / 2.0;
+
+  const slantR = (landmarks[107].y - landmarks[70].y) / dEyes;
+  const slantL = (landmarks[336].y - landmarks[300].y) / dEyes;
+  const avgBrowSlant = (slantR + slantL) / 2.0;
+
+  // 5. 計算喜怒哀樂評分
+  let scoreLe = 0.0;
+  if (mouthRatio > 0.048 && smileRatio > 0.48) {
+    scoreLe = Math.min(1.0, (smileRatio - 0.46) * 3.5 + (mouthRatio - 0.04) * 7.5);
+  }
+
+  let scoreXi = 0.0;
+  if (smileRatio > 0.47 || cornerElevation > 0.015) {
+    scoreXi = Math.min(1.0, Math.max(0.0, (smileRatio - 0.45) * 3.0 + Math.max(0.0, cornerElevation) * 12.0));
+    if (mouthRatio > 0.065) {
+      scoreXi *= 0.45;
+    }
+  }
+
+  let scoreNu = 0.0;
+  if (dBrowInner < 0.315 && avgBrowEyeDist < 0.20) {
+    const tightScore = Math.max(0.0, (0.315 - dBrowInner) * 9.0);
+    const lowerScore = Math.max(0.0, (0.20 - avgBrowEyeDist) * 8.0);
+    const slantScore = Math.max(0.0, avgBrowSlant * 6.0);
+    scoreNu = Math.min(1.0, tightScore * 0.5 + lowerScore * 0.35 + slantScore * 0.15);
+    if (smileRatio > 0.49) scoreNu *= 0.15;
+  }
+
+  let scoreAi = 0.0;
+  if (cornerElevation < -0.012 || avgBrowSlant < -0.010) {
+    const droopScore = Math.max(0.0, (-0.010 - cornerElevation) * 16.0);
+    const sadBrowScore = Math.max(0.0, (-avgBrowSlant) * 10.0);
+    scoreAi = Math.min(1.0, droopScore * 0.65 + sadBrowScore * 0.35);
+    if (smileRatio > 0.48 || mouthRatio > 0.08) scoreAi *= 0.15;
+  }
+
+  const scoreNeutral = 0.32;
+
+  const scores = {
+    '喜': Math.round(scoreXi * 100) / 100,
+    '怒': Math.round(scoreNu * 100) / 100,
+    '哀': Math.round(scoreAi * 100) / 100,
+    '樂': Math.round(scoreLe * 100) / 100,
+    '平靜': scoreNeutral
+  };
+
+  const candidates = [
+    { emotion: '樂', score: scoreLe },
+    { emotion: '喜', score: scoreXi },
+    { emotion: '怒', score: scoreNu },
+    { emotion: '哀', score: scoreAi }
+  ];
+  candidates.sort((a, b) => b.score - a.score);
+
+  let candidateEmotion = '平靜';
+  let conf = 0.50;
+  if (candidates[0].score >= 0.28) {
+    candidateEmotion = candidates[0].emotion;
+    conf = Math.round(candidates[0].score * 100) / 100;
+  } else {
+    candidateEmotion = '平靜';
+    conf = Math.round(Math.max(0.5, 1.0 - candidates[0].score) * 100) / 100;
+  }
+
+  // 時序平滑濾波
+  faceEmotionHistory.push(candidateEmotion);
+  if (faceEmotionHistory.length > 7) faceEmotionHistory.shift();
+
+  const freq = {};
+  faceEmotionHistory.forEach(e => freq[e] = (freq[e] || 0) + 1);
+  let bestFreqEmotion = candidateEmotion;
+  let maxCount = 0;
+  for (const [em, cnt] of Object.entries(freq)) {
+    if (cnt > maxCount) {
+      maxCount = cnt;
+      bestFreqEmotion = em;
+    }
+  }
+
+  const activeEmotion = maxCount >= 4 ? bestFreqEmotion : (lastStableEmotion || candidateEmotion);
+  lastStableEmotion = activeEmotion;
+
+  let microAction = '';
+  if (isBlink) microAction = ' [閉眼]';
+  else if (isLeftClosed) microAction = ' [眨左眼]';
+  else if (isRightClosed) microAction = ' [眨右眼]';
+  else if (mouthRatio > 0.085 && activeEmotion !== '樂' && activeEmotion !== '喜') {
+    microAction = ' [驚訝/張嘴]';
+  }
+
+  const emojiMap = { '喜': '😊', '怒': '😠', '哀': '😢', '樂': '😄', '平靜': '😐' };
+  const enMap = {
+    '喜': 'Joy / Smile',
+    '怒': 'Anger / Frown',
+    '哀': 'Sadness / Sorrow',
+    '樂': 'Delight / Laughter',
+    '平靜': 'Neutral / Calm'
+  };
+
+  return {
+    emotion: activeEmotion,
+    label: `${emojiMap[activeEmotion] || '😐'} ${activeEmotion}${microAction}`,
+    confidence: conf,
+    scores: scores,
+    microAction: microAction,
+    emoji: emojiMap[activeEmotion] || '😐',
+    en: enMap[activeEmotion] || 'Neutral'
+  };
+}
+
+function updateEmotionUI(res) {
+  if (!res) return;
+
+  // 1. 更新頂部 HUD Pill
+  if (faceEmotionHud) {
+    faceEmotionHud.textContent = `🎭 臉部: ${res.label}`;
+    const colorMap = {
+      '喜': '#f59e0b',
+      '怒': '#ef4444',
+      '哀': '#3b82f6',
+      '樂': '#10b981',
+      '平靜': '#94a3b8'
+    };
+    const c = colorMap[res.emotion] || '#94a3b8';
+    faceEmotionHud.style.borderColor = c;
+    faceEmotionHud.style.color = c;
+  }
+
+  // 2. 更新 Detection Process 儀表板
+  if (emotionHeroEmoji) emotionHeroEmoji.textContent = res.emoji;
+  if (emotionHeroName) emotionHeroName.textContent = `${res.emotion} (${res.en})`;
+  if (emotionHeroSub) {
+    const auDescMap = {
+      '喜': 'AU12 嘴角上揚 × 雙頰顴肌提升',
+      '怒': 'AU4 眉心深蹙 × 眉眼距離緊縮',
+      '哀': 'AU15 嘴角微下撇 × 內眉稍抬',
+      '樂': 'AU12+AU25 開懷大笑 × 眼角微瞇',
+      '平靜': 'AU0 面部肌肉自然放鬆中性態'
+    };
+    emotionHeroSub.textContent = auDescMap[res.emotion] || '面部姿態穩定';
+  }
+
+  if (emotionHeroBadge) {
+    const map = { '喜': 'xi', '怒': 'nu', '哀': 'ai', '樂': 'le', '平靜': 'neutral' };
+    emotionHeroBadge.className = `emotion-hero-badge emotion-${map[res.emotion] || 'neutral'}`;
+  }
+
+  if (emotionMicroPill) {
+    emotionMicroPill.textContent = res.microAction ? `微表情: ${res.microAction.replace(/[\[\]]/g, '')}` : '微表情: 正常雙眼';
+  }
+
+  // 3. 更新各項機率進度條
+  const scores = res.scores || {};
+  const setBar = (valEl, fillEl, score) => {
+    if (!valEl || !fillEl) return;
+    const pct = Math.min(100, Math.max(0, Math.round((score || 0) * 100)));
+    valEl.textContent = `${pct}%`;
+    fillEl.style.width = `${pct}%`;
+  };
+
+  setBar(valEmotionXi, fillEmotionXi, scores['喜']);
+  setBar(valEmotionNu, fillEmotionNu, scores['怒']);
+  setBar(valEmotionAi, fillEmotionAi, scores['哀']);
+  setBar(valEmotionLe, fillEmotionLe, scores['樂']);
+  setBar(valEmotionNeutral, fillEmotionNeutral, scores['平靜']);
+}
+
+function onFaceMeshResults(results) {
+  if (!isFaceMeshEnabled) return;
+
+  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    const landmarks = results.multiFaceLandmarks[0];
+    latestFaceLandmarks = landmarks;
+    const emotionRes = classifyFacialEmotion(landmarks);
+    if (emotionRes) {
+      currentFaceEmotion = emotionRes;
+      updateEmotionUI(emotionRes);
+      // 若手語教室正練習表情，即時觸發匹配更新
+      const currentLesson = CLASSROOM_LESSONS.find(l => l.word === currentPracticeTarget);
+      if (currentLesson && currentLesson.isEmotion) {
+        handleClassroomFeedback(currentCandidate, currentConfidence);
+      }
+    }
+  } else {
+    latestFaceLandmarks = null;
+    if (faceEmotionHud) {
+      faceEmotionHud.textContent = '🎭 臉部表情: 未偵測到臉部';
+      faceEmotionHud.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+      faceEmotionHud.style.color = 'var(--text-muted)';
+    }
+  }
+}
+
+function drawFaceMeshOverlay(landmarks, emotionRes) {
+  if (!landmarks || landmarks.length === 0) return;
+
+  const w = canvasElement.width;
+  const h = canvasElement.height;
+
+  // 定義面部五官關鍵輪廓線
+  const FEATURE_PATHS = [
+    // 嘴唇外圍
+    [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61],
+    // 右眉
+    [70, 63, 105, 66, 107],
+    // 左眉
+    [336, 296, 334, 293, 300],
+    // 右眼
+    [33, 160, 158, 133, 153, 144, 33],
+    // 左眼
+    [362, 385, 387, 263, 373, 380, 362]
+  ];
+
+  const emotionColors = {
+    '喜': '#f59e0b',
+    '怒': '#ef4444',
+    '哀': '#3b82f6',
+    '樂': '#10b981',
+    '平靜': '#00f0ff'
+  };
+  const activeColor = (emotionRes && emotionColors[emotionRes.emotion]) ? emotionColors[emotionRes.emotion] : '#00f0ff';
+
+  canvasCtx.save();
+  canvasCtx.lineWidth = 1.8;
+  canvasCtx.strokeStyle = activeColor;
+  canvasCtx.shadowColor = activeColor;
+  canvasCtx.shadowBlur = 4;
+
+  FEATURE_PATHS.forEach(path => {
+    canvasCtx.beginPath();
+    path.forEach((idx, i) => {
+      const pt = landmarks[idx];
+      if (!pt) return;
+      const x = pt.x * w;
+      const y = pt.y * h;
+      if (i === 0) canvasCtx.moveTo(x, y);
+      else canvasCtx.lineTo(x, y);
+    });
+    canvasCtx.stroke();
+  });
+
+  // 在額頭正上方 (點 10) 繪製動態表情 AR 標籤
+  const forehead = landmarks[10];
+  if (forehead && emotionRes) {
+    const fx = forehead.x * w;
+    const fy = Math.max(25, forehead.y * h - 22);
+
+    const badgeText = `${emotionRes.emoji} ${emotionRes.emotion} ${Math.round((emotionRes.confidence || 0.8) * 100)}%`;
+    canvasCtx.font = 'bold 13px "Noto Sans TC", sans-serif';
+    const textWidth = canvasCtx.measureText(badgeText).width;
+    const padX = 10;
+    const boxW = textWidth + padX * 2;
+    const boxH = 24;
+    const boxX = fx - boxW / 2;
+    const boxY = fy - boxH / 2;
+
+    // 背景
+    canvasCtx.fillStyle = 'rgba(8, 11, 17, 0.82)';
+    canvasCtx.strokeStyle = activeColor;
+    canvasCtx.lineWidth = 1.5;
+    canvasCtx.shadowBlur = 8;
+    canvasCtx.beginPath();
+    if (canvasCtx.roundRect) {
+      canvasCtx.roundRect(boxX, boxY, boxW, boxH, 12);
+    } else {
+      canvasCtx.rect(boxX, boxY, boxW, boxH);
+    }
+    canvasCtx.fill();
+    canvasCtx.stroke();
+
+    // 文字
+    canvasCtx.shadowBlur = 0;
+    canvasCtx.fillStyle = '#ffffff';
+    canvasCtx.textAlign = 'center';
+    canvasCtx.textBaseline = 'middle';
+    canvasCtx.fillText(badgeText, fx, fy);
+  }
+
+  canvasCtx.restore();
+}
+
 // ===================== 5. 核心每幀回呼 (Core Frame Loop) =====================
 function onHandsResults(results) {
   const now = performance.now();
@@ -422,6 +782,11 @@ function onHandsResults(results) {
     updateTemporalStability('No hand');
     handleClassroomFeedback('No hand', 0);
     handleQuizFrameMatching('No hand', 0);
+  }
+
+  // 繪製臉部網格輪廓與 AR 表情標籤 (FaceMesh Overlay)
+  if (isFaceMeshEnabled && latestFaceLandmarks) {
+    drawFaceMeshOverlay(latestFaceLandmarks, currentFaceEmotion);
   }
 
   canvasCtx.restore();
@@ -665,8 +1030,12 @@ function selectClassroomLesson(lesson) {
 
   practiceFeedbackBox.className = 'practice-feedback-box';
   feedbackIcon.textContent = '🎯';
-  feedbackTitle.textContent = `請在鏡頭前比出【${lesson.name}】`;
-  feedbackDesc.textContent = '系統正透過 126 維度空間座標比對您的手部姿態...';
+  feedbackTitle.textContent = lesson.isEmotion 
+    ? `請在鏡頭前展現【${lesson.name}】表情` 
+    : `請在鏡頭前比出【${lesson.name}】`;
+  feedbackDesc.textContent = lesson.isEmotion
+    ? '系統正透過 478 點臉部幾何網格 (FaceMesh) 分析您的嘴型與眼眉姿態...'
+    : '系統正透過 126 維度空間座標比對您的手部姿態...';
   practiceMatchPercent.textContent = '0%';
   practiceMatchBar.style.width = '0%';
 }
@@ -674,18 +1043,36 @@ function selectClassroomLesson(lesson) {
 function handleClassroomFeedback(label, confidence) {
   if (!practiceTargetWord) return;
 
-  const isMatched = label === currentPracticeTarget;
+  const currentLesson = CLASSROOM_LESSONS.find(l => l.word === currentPracticeTarget);
+  const isEmotionLesson = currentLesson && currentLesson.isEmotion;
+
+  let isMatched = false;
+  let matchPct = 0;
+
+  if (isEmotionLesson) {
+    // 臉部表情幾何匹配 (喜怒哀樂)
+    isMatched = isFaceMeshEnabled && (currentFaceEmotion.emotion === currentPracticeTarget);
+    matchPct = Math.min(100, Math.round(currentFaceEmotion.confidence * 100));
+  } else {
+    // 傳統 126 維手語手勢匹配
+    isMatched = (label === currentPracticeTarget);
+    matchPct = Math.min(100, Math.round(confidence * 100));
+  }
+
   if (isMatched) {
     practiceMatchStreak++;
-    const pct = Math.min(100, Math.round(confidence * 100));
-    practiceMatchPercent.textContent = `${pct}%`;
-    practiceMatchBar.style.width = `${pct}%`;
+    practiceMatchPercent.textContent = `${matchPct}%`;
+    practiceMatchBar.style.width = `${matchPct}%`;
 
     if (practiceMatchStreak >= 3) {
       practiceFeedbackBox.className = 'practice-feedback-box matched';
       feedbackIcon.textContent = '🎉';
-      feedbackTitle.textContent = `太棒了！成功比出【${practiceTargetWord.textContent}】！`;
-      feedbackDesc.textContent = `模型分數達 ${pct}%，手勢姿態符合目前分類。`;
+      feedbackTitle.textContent = isEmotionLesson
+        ? `太棒了！成功展現【${practiceTargetWord.textContent}】！`
+        : `太棒了！成功比出【${practiceTargetWord.textContent}】！`;
+      feedbackDesc.textContent = isEmotionLesson
+        ? `臉部幾何特徵吻合度達 ${matchPct}% (${currentFaceEmotion.en})，成功識別非手勢表情信號！`
+        : `模型分數達 ${matchPct}%，手勢姿態符合目前分類。`;
       if (practiceMatchStreak === 3) {
         playSuccessChime();
       }
@@ -696,10 +1083,14 @@ function handleClassroomFeedback(label, confidence) {
     practiceMatchBar.style.width = '0%';
     practiceFeedbackBox.className = 'practice-feedback-box';
     feedbackIcon.textContent = '🎯';
-    feedbackTitle.textContent = `請比出【${practiceTargetWord.textContent}】`;
-    feedbackDesc.textContent = label !== 'No hand' && label !== 'Unknown' 
-      ? `目前偵測到：${label}，請參照提示調整手勢。` 
-      : '鏡頭偵測中，請比出手勢...';
+    feedbackTitle.textContent = isEmotionLesson
+      ? `請展現【${practiceTargetWord.textContent}】表情`
+      : `請比出【${practiceTargetWord.textContent}】`;
+    feedbackDesc.textContent = isEmotionLesson
+      ? `當前臉部表情：${currentFaceEmotion.label}，請依照提示調整表情。`
+      : (label !== 'No hand' && label !== 'Unknown' 
+          ? `目前偵測到：${label}，請參照提示調整手勢。` 
+          : '鏡頭偵測中，請比出手勢...');
   }
 }
 
@@ -1056,11 +1447,26 @@ async function startWebcam() {
     if (!handsDetector) {
       initMediaPipeHands();
     }
+    if (!faceMeshDetector && isFaceMeshEnabled) {
+      initMediaPipeFaceMesh();
+    }
 
     camera = new Camera(videoElement, {
       onFrame: async () => {
-        if (handsDetector && isCameraRunning) {
-          await handsDetector.send({ image: videoElement });
+        if (!isCameraRunning) return;
+        if (handsDetector) {
+          try {
+            await handsDetector.send({ image: videoElement });
+          } catch (e) {
+            console.warn('Hands frame send error:', e);
+          }
+        }
+        if (isFaceMeshEnabled && faceMeshDetector) {
+          try {
+            await faceMeshDetector.send({ image: videoElement });
+          } catch (e) {
+            console.warn('FaceMesh frame send error:', e);
+          }
         }
       },
       width: 640,
@@ -1135,11 +1541,20 @@ function updateVideoProgressUI() {
 async function processVideoFrameLoop() {
   if (!isVideoMode || videoElement.paused || videoElement.ended) return;
 
-  if (handsDetector && videoElement.readyState >= 2) {
-    try {
-      await handsDetector.send({ image: videoElement });
-    } catch (e) {
-      console.warn('處理影片訊框警告:', e);
+  if (videoElement.readyState >= 2) {
+    if (handsDetector) {
+      try {
+        await handsDetector.send({ image: videoElement });
+      } catch (e) {
+        console.warn('處理影片訊框警告 (Hands):', e);
+      }
+    }
+    if (isFaceMeshEnabled && faceMeshDetector) {
+      try {
+        await faceMeshDetector.send({ image: videoElement });
+      } catch (e) {
+        console.warn('處理影片訊框警告 (FaceMesh):', e);
+      }
     }
   }
   updateVideoProgressUI();
@@ -1160,6 +1575,9 @@ function startPlayingVideo(videoSrc, isLocalBlob = false) {
 
   if (!handsDetector) {
     initMediaPipeHands();
+  }
+  if (!faceMeshDetector && isFaceMeshEnabled) {
+    initMediaPipeFaceMesh();
   }
 
   isVideoMode = true;
@@ -1441,6 +1859,60 @@ function initMediaPipeHands() {
   handsDetector.onResults(onHandsResults);
 }
 
+function initMediaPipeFaceMesh() {
+  if (typeof FaceMesh === 'undefined') {
+    console.warn('FaceMesh 函式庫尚未載入，請確認網路連線。');
+    return;
+  }
+
+  try {
+    faceMeshDetector = new FaceMesh({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+    });
+
+    faceMeshDetector.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    faceMeshDetector.onResults(onFaceMeshResults);
+  } catch (err) {
+    console.warn('初始化 FaceMesh 失敗:', err);
+  }
+}
+
+// 臉部表情辨識開關監聽
+if (toggleFaceMeshBtn) {
+  toggleFaceMeshBtn.addEventListener('click', () => {
+    isFaceMeshEnabled = !isFaceMeshEnabled;
+    if (faceMeshStatusText) {
+      faceMeshStatusText.textContent = isFaceMeshEnabled ? '開啟' : '關閉';
+    }
+    toggleFaceMeshBtn.classList.toggle('btn-secondary', isFaceMeshEnabled);
+    toggleFaceMeshBtn.classList.toggle('btn-outline', !isFaceMeshEnabled);
+
+    if (!isFaceMeshEnabled) {
+      latestFaceLandmarks = null;
+      if (faceEmotionHud) {
+        faceEmotionHud.textContent = '🎭 表情辨識已關閉';
+        faceEmotionHud.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        faceEmotionHud.style.color = 'var(--text-dim)';
+      }
+    } else {
+      if (!faceMeshDetector) {
+        initMediaPipeFaceMesh();
+      }
+      if (faceEmotionHud) {
+        faceEmotionHud.textContent = '🎭 臉部表情: 偵測中...';
+        faceEmotionHud.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+        faceEmotionHud.style.color = '#fbbf24';
+      }
+    }
+  });
+}
+
 // 語句複製與清空
 copySentenceBtn.addEventListener('click', () => {
   if (sentenceList.length === 0) return;
@@ -1470,6 +1942,7 @@ setInterval(() => {
 window.addEventListener('DOMContentLoaded', async () => {
   canvasElement.classList.add('mirror');
   initMediaPipeHands();
+  initMediaPipeFaceMesh();
   const loaded = await loadKNNModel();
   if (loaded) {
     loadingOverlay.classList.remove('hidden');
