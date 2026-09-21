@@ -60,12 +60,19 @@
     <!-- 共用頂部攝影機視窗與浮動狀態區 (所有分頁共用即時鏡頭) -->
     <div class="shared-camera-dock">
       <div class="dock-viewport-container">
-        <div class="dock-viewport">
+        <div class="dock-viewport" id="dockViewport">
           <video id="webcamVideo" playsinline muted></video>
           <canvas id="outputCanvas"></canvas>
           <div class="viewport-overlay" id="loadingOverlay">
             <div class="spinner"></div>
             <p id="loadingMsg">正在載入 519 詞彙模型與 MediaPipe 關節追蹤...</p>
+          </div>
+          <!-- 拖曳丟入影片提示浮層 (Drag & Drop Zone) -->
+          <div class="drop-zone-overlay hidden" id="dropZoneOverlay">
+            <div class="drop-content">
+              <span class="drop-icon">📥</span>
+              <p class="drop-text">放開以載入影片進行手語辨識</p>
+            </div>
           </div>
           <div class="tracking-hud" id="trackingHud">
             <span class="hud-pill" id="handCountHud">未偵測到手部</span>
@@ -81,10 +88,29 @@
           <button class="btn btn-secondary btn-sm" id="flipMirrorBtn" title="鏡像翻轉">
             <span class="btn-icon">🪞</span> 鏡像翻轉
           </button>
-          <label class="btn btn-secondary btn-sm upload-label">
+          <label class="btn btn-secondary btn-sm upload-label" title="從本機上傳影片檔">
             <span class="btn-icon">📁</span> 上傳影片
             <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
           </label>
+          <button class="btn btn-accent btn-sm" id="openVideoUrlModalBtn" title="貼上或輸入影片連結（支援 YouTube / MP4）">
+            <span class="btn-icon">🔗</span> 丟入影片網址
+          </button>
+        </div>
+
+        <!-- 影片播放與時間軸控制列（載入影片後自動展開） -->
+        <div class="video-player-bar hidden" id="videoPlayerBar">
+          <button class="btn-icon-control" id="playPauseVideoBtn" title="播放/暫停">▶️</button>
+          <span class="video-time-display" id="videoTimeDisplay">00:00 / 00:00</span>
+          <input type="range" class="video-timeline-slider" id="videoTimeline" min="0" max="100" value="0" step="0.1">
+          <select class="video-speed-select" id="videoSpeedSelect" title="調整辨識與播放速度">
+            <option value="0.25">0.25x (超慢分析)</option>
+            <option value="0.5">0.5x (半速分析)</option>
+            <option value="1" selected>1.0x (原速)</option>
+            <option value="1.5">1.5x (加速)</option>
+            <option value="2">2.0x (倍速)</option>
+          </select>
+          <button class="btn-icon-control" id="loopVideoBtn" title="循環播放">🔁</button>
+          <button class="btn-icon-control danger" id="closeVideoBtn" title="關閉影片返回相機模式">❌ 關閉</button>
         </div>
       </div>
 
@@ -467,6 +493,66 @@
     <footer class="app-footer">
       <p>MyVisinfirst 手語視覺專題展示系統 ｜ 採用 MediaPipe Hands 關節點追蹤 ＆ 126 維 KNN 相對空間演算法 ｜ 支援 519 種台灣手語詞彙</p>
     </footer>
+  </div>
+
+  <!-- 丟入影片連結彈窗 Modal -->
+  <div class="modal-overlay hidden" id="videoUrlModal">
+    <div class="modal-card video-url-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">VIDEO URL</span>
+          <h3>🔗 丟入影片連結辨識</h3>
+        </div>
+        <button class="modal-close-btn" id="closeVideoUrlModalBtn" title="關閉">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          支援輸入 <strong>YouTube 影片連結</strong> 或任何 <strong>MP4 / WebM 線上影片直鏈</strong>。<br>
+          系統將自動載入串流影片，並逐影格進行 126 維度手語姿態即時比對！
+        </p>
+
+        <div class="url-input-container">
+          <div class="input-with-icon">
+            <span class="input-icon">🌐</span>
+            <input 
+              type="url" 
+              id="videoUrlInput" 
+              class="cyber-input" 
+              placeholder="請貼上影片網址，例如：https://www.youtube.com/watch?v=nE4kuhO0l3E"
+              autocomplete="off"
+            >
+            <button type="button" class="btn-clear-input hidden" id="clearUrlInputBtn" title="清空網址">&times;</button>
+          </div>
+          <button type="button" class="btn btn-primary" id="submitVideoUrlBtn">
+            <span>🚀 載入並開始辨識</span>
+          </button>
+        </div>
+
+        <!-- 狀態與載入進度 -->
+        <div class="url-status-message hidden" id="urlStatusMsg">
+          <div class="spinner mini-spinner"></div>
+          <span id="urlStatusText">正在分析影片來源...</span>
+        </div>
+
+        <!-- 快速範例推薦 -->
+        <div class="quick-examples">
+          <span class="quick-title">💡 點擊快速帶入測試範例：</span>
+          <div class="quick-chips">
+            <button type="button" class="quick-chip-btn" data-url="https://www.youtube.com/watch?v=nE4kuhO0l3E">
+              📺 YouTube 手語示範影片
+            </button>
+            <button type="button" class="quick-chip-btn" data-url="/sign_language_app/temp_downloads/temp_video_1788799029.mp4">
+              🎬 專案內建測試短片
+            </button>
+          </div>
+        </div>
+
+        <div class="drop-hint-box">
+          <span class="hint-icon">💡</span>
+          <span>小技巧：您也可以直接將電腦上的影片檔案<strong>拖曳 (Drag & Drop)</strong> 到視訊畫面上直接播放！</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

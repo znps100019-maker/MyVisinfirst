@@ -1079,37 +1079,339 @@ async function startWebcam() {
   }
 }
 
-// 影片檔案上傳支援
-videoFileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+// ===================== 15. 影片播放控制與網址丟入 =====================
+const dockViewport = document.getElementById('dockViewport');
+const dropZoneOverlay = document.getElementById('dropZoneOverlay');
+const openVideoUrlModalBtn = document.getElementById('openVideoUrlModalBtn');
+const closeVideoUrlModalBtn = document.getElementById('closeVideoUrlModalBtn');
+const videoUrlModal = document.getElementById('videoUrlModal');
+const videoUrlInput = document.getElementById('videoUrlInput');
+const clearUrlInputBtn = document.getElementById('clearUrlInputBtn');
+const submitVideoUrlBtn = document.getElementById('submitVideoUrlBtn');
+const urlStatusMsg = document.getElementById('urlStatusMsg');
+const urlStatusText = document.getElementById('urlStatusText');
 
+const videoPlayerBar = document.getElementById('videoPlayerBar');
+const playPauseVideoBtn = document.getElementById('playPauseVideoBtn');
+const videoTimeDisplay = document.getElementById('videoTimeDisplay');
+const videoTimeline = document.getElementById('videoTimeline');
+const videoSpeedSelect = document.getElementById('videoSpeedSelect');
+const loopVideoBtn = document.getElementById('loopVideoBtn');
+const closeVideoBtn = document.getElementById('closeVideoBtn');
+
+let isVideoMode = false;
+let videoRafId = null;
+
+// 時間格式化 mm:ss
+function formatTime(sec) {
+  if (isNaN(sec) || sec < 0) return '00:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function updateVideoProgressUI() {
+  if (!isVideoMode || !videoElement.duration) return;
+  const current = videoElement.currentTime;
+  const total = videoElement.duration;
+  videoTimeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
+  videoTimeline.value = total > 0 ? (current / total) * 100 : 0;
+}
+
+// 影片逐影格處理迴圈
+async function processVideoFrameLoop() {
+  if (!isVideoMode || videoElement.paused || videoElement.ended) return;
+
+  if (handsDetector && videoElement.readyState >= 2) {
+    try {
+      await handsDetector.send({ image: videoElement });
+    } catch (e) {
+      console.warn('處理影片訊框警告:', e);
+    }
+  }
+  updateVideoProgressUI();
+  videoRafId = requestAnimationFrame(processVideoFrameLoop);
+}
+
+// 啟動影片播放（支援 Blob URL 或線上/本地 URL）
+function startPlayingVideo(videoSrc, isLocalBlob = false) {
+  // 1. 關閉既有攝影機
   if (isCameraRunning && camera) {
     camera.stop();
+    camera = null;
     isCameraRunning = false;
     toggleCameraText.textContent = '啟動攝影機';
     toggleCameraBtn.classList.remove('btn-danger');
     toggleCameraBtn.classList.add('btn-primary');
   }
 
-  const url = URL.createObjectURL(file);
-  videoElement.src = url;
-  videoElement.loop = true;
-  videoElement.play();
-
-  loadingOverlay.classList.add('hidden');
-
-  async function processVideoFrame() {
-    if (!videoElement.paused && !videoElement.ended && handsDetector) {
-      await handsDetector.send({ image: videoElement });
-      requestAnimationFrame(processVideoFrame);
-    }
+  if (!handsDetector) {
+    initMediaPipeHands();
   }
 
-  videoElement.onplay = () => {
-    requestAnimationFrame(processVideoFrame);
-  };
+  isVideoMode = true;
+  loadingOverlay.classList.add('hidden');
+  videoPlayerBar.classList.remove('hidden');
+
+  // 影片辨識預設取消鏡像反轉，保持原始方向
+  isMirror = false;
+  canvasElement.classList.remove('mirror');
+
+  // 設置影片屬性
+  if (!isLocalBlob) {
+    videoElement.crossOrigin = 'anonymous';
+  } else {
+    videoElement.removeAttribute('crossOrigin');
+  }
+
+  videoElement.src = videoSrc;
+  videoElement.loop = true;
+  loopVideoBtn.classList.add('active');
+  videoElement.playbackRate = parseFloat(videoSpeedSelect.value || '1');
+
+  videoElement.play().then(() => {
+    playPauseVideoBtn.textContent = '⏸️';
+    if (videoRafId) cancelAnimationFrame(videoRafId);
+    videoRafId = requestAnimationFrame(processVideoFrameLoop);
+  }).catch(err => {
+    console.error('影片自動播放失敗:', err);
+    loadingOverlay.classList.remove('hidden');
+    loadingMsg.textContent = `無法播放影片：${err.message || err}。請確認網址是否受跨域(CORS)限制。`;
+  });
+}
+
+// 停止並退出影片模式
+function stopVideoMode() {
+  isVideoMode = false;
+  if (videoRafId) {
+    cancelAnimationFrame(videoRafId);
+    videoRafId = null;
+  }
+  videoElement.pause();
+  videoElement.src = '';
+  videoElement.removeAttribute('src');
+  videoPlayerBar.classList.add('hidden');
+
+  // 清空畫布與狀態
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  currentCandidate = 'No hand';
+  currentConfidence = 0.0;
+  updateDockAndRecognitionUI();
+
+  loadingOverlay.classList.remove('hidden');
+  loadingMsg.textContent = '影片已停止。點擊「啟動攝影機」或再次「丟入影片網址」開始辨識。';
+}
+
+// 丟入網址解析與載入邏輯
+async function loadVideoUrl(rawUrl) {
+  const url = (rawUrl || '').trim();
+  if (!url) {
+    showUrlStatus('請輸入有效的影片網址！', true);
+    return;
+  }
+
+  showUrlStatus('正在分析影片來源與支援格式...', false);
+
+  // 1. 如果是常見的影片直鏈 (.mp4, .webm, .ogg, .mov, blob:, 或本地路徑)
+  const cleanUrl = url.split('?')[0].toLowerCase();
+  const isDirectVideo = cleanUrl.endsWith('.mp4') || 
+                        cleanUrl.endsWith('.webm') || 
+                        cleanUrl.endsWith('.ogg') || 
+                        cleanUrl.endsWith('.mov') || 
+                        url.startsWith('blob:') || 
+                        url.startsWith('/sign_language_app/');
+
+  if (isDirectVideo) {
+    showUrlStatus('✅ 找到影片串流，正在載入畫面...', false);
+    setTimeout(() => {
+      startPlayingVideo(url);
+      closeVideoModal();
+    }, 300);
+    return;
+  }
+
+  // 2. 如果是 YouTube 或其他平台連結，呼叫本機後端 API (yt-dlp) 解析
+  showUrlStatus('📡 正在請求後端解析/下載影片串流 (yt-dlp)...', false);
+
+  try {
+    const response = await fetch('/api/resolve_video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.status === 'ok' && result.url) {
+        showUrlStatus('🎉 影片解析成功！正在載入畫面...', false);
+        setTimeout(() => {
+          startPlayingVideo(result.url);
+          closeVideoModal();
+        }, 400);
+        return;
+      } else {
+        throw new Error(result.message || '無法解析此影片連結');
+      }
+    } else {
+      throw new Error(`後端回應代碼：${response.status}`);
+    }
+  } catch (err) {
+    console.warn('後端解析失敗或為純前端靜態託管環境:', err);
+    showUrlStatus(`⚠️ 解析失敗（${err.message || err}）。\n提示：若在 GitHub Pages 上展示，請提供 MP4/WebM 直鏈或點擊「上傳影片」；本機執行 python run_web.py 即可支援 YouTube 網址！`, true);
+  }
+}
+
+// 彈窗狀態控制
+function openVideoModal() {
+  videoUrlModal.classList.remove('hidden');
+  videoUrlInput.focus();
+}
+
+function closeVideoModal() {
+  videoUrlModal.classList.add('hidden');
+  urlStatusMsg.classList.add('hidden');
+}
+
+function showUrlStatus(msg, isError = false) {
+  urlStatusMsg.classList.remove('hidden');
+  urlStatusText.textContent = msg;
+  urlStatusMsg.style.borderColor = isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(0, 240, 255, 0.4)';
+  urlStatusMsg.style.background = isError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(0, 240, 255, 0.08)';
+  urlStatusMsg.style.color = isError ? '#f87171' : 'var(--cyan-accent)';
+  const spinner = urlStatusMsg.querySelector('.spinner');
+  if (spinner) spinner.style.display = isError ? 'none' : 'block';
+}
+
+// 彈窗事件綁定
+openVideoUrlModalBtn.addEventListener('click', openVideoModal);
+closeVideoUrlModalBtn.addEventListener('click', closeVideoModal);
+videoUrlModal.addEventListener('click', (e) => {
+  if (e.target === videoUrlModal) closeVideoModal();
 });
+
+videoUrlInput.addEventListener('input', () => {
+  clearUrlInputBtn.classList.toggle('hidden', !videoUrlInput.value);
+});
+
+clearUrlInputBtn.addEventListener('click', () => {
+  videoUrlInput.value = '';
+  clearUrlInputBtn.classList.add('hidden');
+  urlStatusMsg.classList.add('hidden');
+  videoUrlInput.focus();
+});
+
+submitVideoUrlBtn.addEventListener('click', () => {
+  loadVideoUrl(videoUrlInput.value);
+});
+
+videoUrlInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    loadVideoUrl(videoUrlInput.value);
+  }
+});
+
+// 快速範例推薦點擊
+document.querySelectorAll('.quick-chip-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const sampleUrl = btn.dataset.url;
+    if (sampleUrl) {
+      videoUrlInput.value = sampleUrl;
+      clearUrlInputBtn.classList.remove('hidden');
+      loadVideoUrl(sampleUrl);
+    }
+  });
+});
+
+// 影片播放控制列按鈕
+playPauseVideoBtn.addEventListener('click', () => {
+  if (videoElement.paused) {
+    videoElement.play();
+    playPauseVideoBtn.textContent = '⏸️';
+    if (videoRafId) cancelAnimationFrame(videoRafId);
+    videoRafId = requestAnimationFrame(processVideoFrameLoop);
+  } else {
+    videoElement.pause();
+    playPauseVideoBtn.textContent = '▶️';
+  }
+});
+
+videoTimeline.addEventListener('input', () => {
+  if (videoElement.duration) {
+    videoElement.currentTime = (videoTimeline.value / 100) * videoElement.duration;
+    updateVideoProgressUI();
+  }
+});
+
+videoSpeedSelect.addEventListener('change', () => {
+  videoElement.playbackRate = parseFloat(videoSpeedSelect.value || '1');
+});
+
+loopVideoBtn.addEventListener('click', () => {
+  videoElement.loop = !videoElement.loop;
+  loopVideoBtn.classList.toggle('active', videoElement.loop);
+  loopVideoBtn.title = videoElement.loop ? '循環播放：開啟' : '循環播放：關閉';
+});
+
+closeVideoBtn.addEventListener('click', () => {
+  stopVideoMode();
+});
+
+videoElement.addEventListener('ended', () => {
+  if (!videoElement.loop) {
+    playPauseVideoBtn.textContent = '▶️';
+  }
+});
+
+videoElement.addEventListener('timeupdate', () => {
+  updateVideoProgressUI();
+});
+
+// 檔案選擇器整合
+videoFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  startPlayingVideo(url, true);
+});
+
+// 畫面拖曳丟入影片 (Drag & Drop)
+if (dockViewport) {
+  dockViewport.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneOverlay.classList.remove('hidden');
+  });
+
+  dockViewport.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneOverlay.classList.add('hidden');
+  });
+
+  dockViewport.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZoneOverlay.classList.add('hidden');
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|ogg|mov|avi|mkv)$/i)) {
+        const url = URL.createObjectURL(file);
+        startPlayingVideo(url, true);
+        return;
+      }
+    }
+
+    const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+    if (text && text.startsWith('http')) {
+      videoUrlInput.value = text.trim();
+      clearUrlInputBtn.classList.remove('hidden');
+      loadVideoUrl(text.trim());
+    }
+  });
+}
 
 function initMediaPipeHands() {
   handsDetector = new Hands({
