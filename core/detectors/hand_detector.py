@@ -5,6 +5,7 @@ import os
 
 import cv2
 import mediapipe as mp
+import numpy as np
 
 try:
     from sign_language_app.labels import classification_label
@@ -68,7 +69,7 @@ class HandSignRecognizer:
 
     def __init__(
         self, max_num_hands=2, history_size=8, stable_min_count=3,
-        combine_two_hands=False, use_knn=False,
+        combine_two_hands=False, use_knn=True,
         no_hand_reset_frames=DEFAULT_NO_HAND_RESET_FRAMES,
     ):
         self.hands = mp_hands.Hands(
@@ -88,9 +89,10 @@ class HandSignRecognizer:
         self.gesture_history = []
         self.gesture_start_time = None
 
-        # The existing KNN model format and training flow remain unchanged.
-        # KNN is opt-in so it cannot silently override per-hand rules.
         self.knn_samples = []
+        self.knn_matrix = None
+        self.knn_labels = None
+        self.current_knn_confidence = 0.0
         if self.use_knn:
             model_path = os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "..", "..", "sign_language_app", "model.json")
@@ -99,6 +101,14 @@ class HandSignRecognizer:
                 if os.path.exists(model_path):
                     with open(model_path, "r", encoding="utf-8") as handle:
                         self.knn_samples = json.load(handle).get("samples", [])
+                    if self.knn_samples:
+                        self.knn_matrix = np.array(
+                            [sample["vector"] for sample in self.knn_samples],
+                            dtype=np.float32,
+                        )
+                        self.knn_labels = np.array(
+                            [sample["label"] for sample in self.knn_samples]
+                        )
             except (OSError, ValueError) as exc:
                 print(f"Warning: Could not load KNN model.json: {exc}")
 
@@ -124,17 +134,26 @@ class HandSignRecognizer:
                 })
 
             candidate = self._frame_candidate(detections)
-            if self.use_knn and self.knn_samples and (
-                len(detections) == 1 or self.combine_two_hands
-            ):
-                knn_candidate = self._classify_knn(
-                    self._normalize_landmarks(results.multi_hand_landmarks),
-                    distance_threshold=1.5,
+            knn_candidate = "Unknown"
+            knn_confidence = 0.0
+
+            if self.use_knn and self.knn_samples:
+                num_hands = len(results.multi_hand_landmarks)
+                vector = self._normalize_landmarks(results.multi_hand_landmarks)
+                knn_candidate, knn_confidence = self._classify_knn(
+                    vector,
+                    k=9,
+                    num_hands=num_hands,
                 )
                 if knn_candidate != "Unknown":
                     candidate = knn_candidate
+                    for detection in detections:
+                        detection["sign"] = knn_candidate
+
+            self.current_knn_confidence = knn_confidence
         else:
             candidate = "No hand"
+            self.current_knn_confidence = 0.0
 
         self._record_candidate(candidate, len(detections))
         return detections
@@ -192,10 +211,15 @@ class HandSignRecognizer:
                 if stable_sign == "Multiple hands"
                 else classification_label(stable_sign)
             )
+            field_name = "手語辨識" if self.use_knn and self.knn_samples else "手形分類"
+            if self.use_knn and getattr(self, "current_knn_confidence", 0.0) > 0:
+                metric_text = f"模型信心度: {self.current_knn_confidence:.0%}  {status_text}"
+            else:
+                metric_text = f"時間一致率: {stable['consistency']:.0%}  {status_text}"
             rows.extend([
-                {"text": f"手形分類: {shape_text}", "color": (0, 255, 255), "font_size": 24},
+                {"text": f"{field_name}: {shape_text}", "color": (0, 255, 255), "font_size": 24},
                 {
-                    "text": f"時間一致率: {stable['consistency']:.0%}  {status_text}",
+                    "text": metric_text,
                     "color": (0, 220, 255) if stable["is_stable"] else (180, 180, 180),
                     "font_size": 20,
                 },
@@ -447,21 +471,61 @@ class HandSignRecognizer:
         normalized.extend([0.0] * (126 - len(normalized)))
         return normalized[:126]
 
-    def _classify_knn(self, vector, k=9, distance_threshold=1.5):
+    def _classify_knn(self, vector, k=9, distance_threshold=None, num_hands=1):
         if not self.knn_samples:
-            return "Unknown"
+            return "Unknown", 0.0
+
+        if self.knn_matrix is not None and self.knn_labels is not None:
+            query = np.asarray(vector, dtype=np.float32)
+            diffs = self.knn_matrix - query
+            sq_dists = np.sum(diffs * diffs, axis=1)
+
+            k_val = min(k, len(self.knn_samples))
+            top_k_indices = np.argpartition(sq_dists, k_val)[:k_val]
+            top_k_sorted = top_k_indices[np.argsort(sq_dists[top_k_indices])]
+            top_dists = np.sqrt(sq_dists[top_k_sorted])
+            top_labels = self.knn_labels[top_k_sorted]
+
+            min_dist = float(top_dists[0])
+            max_dist = distance_threshold if distance_threshold is not None else (16.0 if num_hands == 1 else 45.0)
+            if min_dist > max_dist:
+                return "Unknown", 0.0
+
+            weights = 1.0 / (top_dists + 1e-4)
+            votes = Counter()
+            for w, l in zip(weights, top_labels):
+                votes[l] += float(w)
+            total_weight = sum(votes.values())
+            if total_weight <= 0:
+                return "Unknown", 0.0
+
+            best_label, best_weight = max(votes.items(), key=lambda item: item[1])
+            confidence = best_weight / total_weight
+            if confidence < 0.20:
+                return "Unknown", 0.0
+            return best_label, confidence
+
+        # Fallback pure Python if numpy matrix not initialized
         neighbors = []
         for sample in self.knn_samples:
             distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(vector, sample["vector"])))
             neighbors.append((distance, sample["label"]))
         neighbors.sort(key=lambda item: item[0])
         top_k = neighbors[:min(k, len(neighbors))]
-        if not top_k or top_k[0][0] > distance_threshold:
-            return "Unknown"
+        max_dist = distance_threshold if distance_threshold is not None else (16.0 if num_hands == 1 else 45.0)
+        if not top_k or top_k[0][0] > max_dist:
+            return "Unknown", 0.0
         votes = Counter()
         for distance, label in top_k:
             votes[label] += 1.0 / max(distance, 1e-6)
-        return max(votes.items(), key=lambda item: item[1])[0] if votes else "Unknown"
+        total_weight = sum(votes.values())
+        if total_weight <= 0:
+            return "Unknown", 0.0
+        best_label, best_weight = max(votes.items(), key=lambda item: item[1])
+        confidence = best_weight / total_weight
+        if confidence < 0.20:
+            return "Unknown", 0.0
+        return best_label, confidence
 
     @staticmethod
     def _scaled_point(point, frame_shape=None):

@@ -58,6 +58,11 @@ def bare_recognizer(history_size=8, stable_min_count=3, **kwargs):
     recognizer.no_hand_streak = 0
     recognizer.sentence = []
     recognizer.last_added_sign = None
+    recognizer.use_knn = kwargs.get("use_knn", False)
+    recognizer.knn_samples = kwargs.get("knn_samples", [])
+    recognizer.knn_matrix = kwargs.get("knn_matrix", None)
+    recognizer.knn_labels = kwargs.get("knn_labels", None)
+    recognizer.current_knn_confidence = 0.0
     return recognizer
 
 

@@ -16,6 +16,7 @@ class MainCliTests(unittest.TestCase):
         self.assertEqual(args.window_width, 1280)
         self.assertEqual(args.window_height, 720)
         self.assertTrue(args.combine_two_hands)
+        self.assertTrue(args.use_knn)
 
     def test_positional_source_is_supported(self):
         with patch.object(sys, "argv", ["main.py", "sample.mp4"]):
@@ -39,6 +40,12 @@ class MainCliTests(unittest.TestCase):
             args = main.build_args()
 
         self.assertFalse(args.combine_two_hands)
+
+    def test_no_knn_can_disable_default_knn_mode(self):
+        with patch.object(sys, "argv", ["main.py", "--no-knn"]):
+            args = main.build_args()
+
+        self.assertFalse(args.use_knn)
 
     def test_empty_interactive_input_keeps_camera_mode(self):
         with patch.object(sys, "argv", ["main.py"]):

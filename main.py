@@ -201,10 +201,19 @@ def build_args():
         action="store_false",
         help="Keep two hands as separate hand classifications.",
     )
-    parser.add_argument(
+    knn_mode = parser.add_mutually_exclusive_group()
+    knn_mode.add_argument(
         "--use-knn",
+        dest="use_knn",
         action="store_true",
-        help="Opt in to the existing KNN model as a global candidate.",
+        default=True,
+        help="Use KNN sign language recognition model (default).",
+    )
+    knn_mode.add_argument(
+        "--no-knn",
+        dest="use_knn",
+        action="store_false",
+        help="Disable KNN model and use rule-based hand shapes only.",
     )
     parser.add_argument(
         "--no-face",
@@ -478,6 +487,12 @@ def main():
         "雙手合併模式：啟用" if args.combine_two_hands else "雙手合併模式：停用",
         flush=True,
     )
+    print(
+        "KNN 手語模型：啟用 (優先進行手語詞彙辨識)"
+        if args.use_knn
+        else "KNN 手語模型：停用 (僅使用靜態手形規則)",
+        flush=True,
+    )
 
     try:
         resource_root = prepare_mediapipe_resources()
@@ -491,6 +506,9 @@ def main():
     except Exception as exc:
         print(f"辨識器初始化失敗：{type(exc).__name__}: {exc}", flush=True)
         raise SystemExit(1)
+    if sign_recognizer.knn_samples:
+        vocab_count = len(set(s["label"] for s in sign_recognizer.knn_samples))
+        print(f"已載入 KNN 模型：{len(sign_recognizer.knn_samples)} 筆樣本 ({vocab_count} 種手語詞彙)", flush=True)
     print("MediaPipe 初始化完成。", flush=True)
 
     target_sign = sign_recognizer.normalize_sign(args.target_sign)
