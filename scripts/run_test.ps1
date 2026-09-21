@@ -28,7 +28,9 @@ if (-not (Test-Path $mappedRoot)) {
     throw "$driveLetter is already in use. Change the drive letter in scripts\run_test.ps1."
 }
 
-$python = Join-Path $mappedRoot ".venv\Scripts\python.exe"
+$helper = Join-Path $PSScriptRoot "resolve_python.ps1"
+. $helper
+$python = Resolve-ProjectPython -ProjectRoot $mappedRoot
 $main = Join-Path $mappedRoot "tests\test_camera_mesh.py"
 
 & $python $main @args

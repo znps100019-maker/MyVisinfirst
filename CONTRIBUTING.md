@@ -9,6 +9,12 @@ Before every GitHub pull request:
    .\scripts\check_syntax.ps1
    ```
 
+   If Windows blocks unsigned local scripts, run the same check explicitly:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_syntax.ps1
+   ```
+
 3. Create a PR only after the syntax check passes:
 
    ```powershell
@@ -28,11 +34,13 @@ This project expects Python 3.10.
 Recommended setup:
 
 ```powershell
-.\.python310\python.exe -m venv .venv
+py -3.10 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-If Python 3.10 is installed globally, `py -3.10 -m venv .venv` is also fine.
+If the old `.venv` points to a removed Python installation, use
+`.\scripts\resolve_python.ps1` for project checks and camera startup, or
+recreate `.venv` with the commands above.
 
 For board-style testing, prefer:
 

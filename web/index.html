@@ -122,7 +122,7 @@
         </div>
         <div class="dock-word-display" id="dockSignWord">請比出手語...</div>
         <div class="dock-confidence-row">
-          <span class="dock-conf-label">模型信心度: <strong id="dockConfidence">0%</strong></span>
+          <span class="dock-conf-label">模型分數: <strong id="dockConfidence">0%</strong></span>
           <div class="confidence-bar-bg mini">
             <div class="confidence-bar-fill" id="dockConfBarFill" style="width: 0%;"></div>
           </div>
@@ -181,7 +181,7 @@
             <div class="panel-card-header">
               <div class="panel-title">
                 <span class="panel-badge result-badge">RESULTS</span>
-                <h3>手語語句與辨識結果 (Detection Results)</h3>
+                <h3>手形分類與辨識結果 (Detection Results)</h3>
               </div>
               <div class="result-status-indicator" id="decisionStatus">
                 <span class="status-icon">⏳</span> 等待手勢
@@ -194,7 +194,7 @@
                 <div class="hero-word-display" id="heroSignWord">請比出手語...</div>
                 <div class="hero-metrics">
                   <div class="metric-item">
-                    <span class="metric-title">模型信心度</span>
+                    <span class="metric-title">模型分數</span>
                     <div class="metric-value-group">
                       <div class="confidence-bar-bg">
                         <div class="confidence-bar-fill" id="confBarFill" style="width: 0%;"></div>
@@ -209,17 +209,17 @@
                 </div>
               </div>
 
-              <!-- 手語語句累積時間軸 -->
+              <!-- 手勢紀錄時間軸 -->
               <div class="sentence-box-wrapper" style="margin-top: 20px;">
                 <div class="sentence-box-header">
-                  <h4>📝 手語語句自動累積 (Sentence Builder)</h4>
+                  <h4>📝 手勢紀錄</h4>
                   <div class="card-actions">
-                    <button class="btn btn-xs" id="copySentenceBtn" title="複製句子">📋 複製語句</button>
+                    <button class="btn btn-xs" id="copySentenceBtn" title="複製手勢紀錄">📋 複製紀錄</button>
                     <button class="btn btn-xs btn-danger" id="clearSentenceBtn" title="清除紀錄">🗑️ 清除</button>
                   </div>
                 </div>
                 <div class="sentence-box" id="sentenceContainer">
-                  <span class="placeholder-text">比出穩定手勢後，系統會自動將單字組裝為語句...</span>
+                  <span class="placeholder-text">比出穩定手勢後，系統會將分類結果記錄在這裡...</span>
                 </div>
               </div>
             </div>

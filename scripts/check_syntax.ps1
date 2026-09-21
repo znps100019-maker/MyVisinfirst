@@ -1,11 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$python = Join-Path $projectRoot ".venv\Scripts\python.exe"
-
-if (-not (Test-Path $python)) {
-    throw "Cannot find .venv. Create the Python 3.10 virtual environment first."
-}
+$helper = Join-Path $PSScriptRoot "resolve_python.ps1"
+. $helper
+$python = Resolve-ProjectPython -ProjectRoot $projectRoot
 
 $code = @"
 import ast

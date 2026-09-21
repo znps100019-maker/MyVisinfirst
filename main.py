@@ -9,6 +9,16 @@ import tempfile
 import time
 
 
+def configure_console_encoding():
+    """Keep Traditional Chinese diagnostics readable on Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, OSError):
+                pass
+
+
 def handle_non_ascii_path():
     """
     Bypass a MediaPipe path encoding issue on Windows by re-running from a
@@ -321,7 +331,11 @@ def open_camera_source(camera_index):
 
 def open_video_source(args):
     if getattr(args, 'video', None):
-        video_input = args.video
+        video_input = args.video.strip()
+        if not video_input:
+            print("影片來源不可為空白。", flush=True)
+            return cv2.VideoCapture()
+
         if video_input.startswith(("http://", "https://")):
             import yt_dlp
             options = {
@@ -340,8 +354,14 @@ def open_video_source(args):
                         sys.exit(1)
             else:
                 print("正在下載影片以確保穩定播放，請稍候...")
-                os.makedirs("sign_language_app/temp_downloads", exist_ok=True)
-                download_path = f"sign_language_app/temp_downloads/temp_video_{int(time.time())}.mp4"
+                project_root = os.path.dirname(os.path.abspath(__file__))
+                download_dir = os.path.join(
+                    project_root, "sign_language_app", "temp_downloads"
+                )
+                os.makedirs(download_dir, exist_ok=True)
+                download_path = os.path.join(
+                    download_dir, f"temp_video_{int(time.time())}.mp4"
+                )
                 options["outtmpl"] = download_path
                 with yt_dlp.YoutubeDL(options) as ydl:
                     try:
@@ -352,6 +372,9 @@ def open_video_source(args):
                         print(f"Cannot download YouTube video: {exc}")
                         sys.exit(1)
                         
+        if not video_input.startswith(("http://", "https://")) and not os.path.isfile(video_input):
+            print(f"找不到影片檔案：{video_input}", flush=True)
+            return cv2.VideoCapture()
         cap = cv2.VideoCapture(video_input)
     else:
         camera_indices = [args.camera]
@@ -411,7 +434,10 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
     while True:
         success, img = cap.read()
         if not success:
-            print("Cannot read frame from camera or video.")
+            if is_camera:
+                print("攝像頭影像讀取中斷。", flush=True)
+            else:
+                print("影片播放完成。", flush=True)
             break
 
         if is_camera:
@@ -475,6 +501,7 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
 
 
 def main():
+    configure_console_encoding()
     args = resolve_interactive_source(build_args())
 
     print("-" * 50)

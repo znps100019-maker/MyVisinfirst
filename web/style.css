@@ -1820,3 +1820,171 @@ body::before {
   border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+/* 小螢幕：維持可橫向滑動的導覽，避免按鈕被壓成直排。 */
+@media (max-width: 720px) {
+  .app-container {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .app-header {
+    align-items: stretch;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .logo-group,
+  .header-badges,
+  .nav-tabs {
+    width: 100%;
+  }
+
+  .logo-group {
+    align-items: flex-start;
+  }
+
+  .logo-text h1 {
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
+
+  .logo-text .subtitle {
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .nav-tabs {
+    overflow-x: auto;
+    justify-content: flex-start;
+    scrollbar-width: thin;
+  }
+
+  .nav-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 11px;
+    font-size: 0.76rem;
+  }
+
+  .header-badges {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .shared-camera-dock {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .dock-viewport {
+    max-height: none;
+    aspect-ratio: 4 / 3;
+  }
+
+  .dock-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dock-controls .btn {
+    min-height: 42px;
+    padding: 8px 6px;
+    font-size: 0.76rem;
+  }
+
+  .dock-summary-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .dock-word-display {
+    font-size: 2rem;
+  }
+
+  .video-player-bar {
+    flex-wrap: wrap;
+  }
+
+  .video-timeline-slider {
+    order: 10;
+    flex-basis: 100%;
+  }
+
+  .panel-card-header,
+  .sentence-box-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .panel-title {
+    align-items: flex-start;
+  }
+
+  .panel-title h3 {
+    font-size: 0.9rem;
+  }
+
+  .panel-card-body,
+  .dictionary-view,
+  .classroom-catalog,
+  .practice-card {
+    padding: 14px;
+  }
+
+  .hero-word-display {
+    font-size: 2.2rem;
+  }
+
+  .finger-status-grid {
+    gap: 4px;
+  }
+
+  .finger-chip {
+    padding: 8px 2px;
+  }
+
+  .finger-chip .chip-name,
+  .finger-chip .chip-state {
+    font-size: 0.68rem;
+  }
+
+  .lesson-cards-grid,
+  .dictionary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .search-box {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .stats-overview-cards,
+  .summary-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .summary-actions .btn {
+    width: 100%;
+  }
+
+  .modal-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .modal-body {
+    padding: 14px;
+  }
+
+  .app-footer {
+    font-size: 0.68rem;
+    line-height: 1.45;
+  }
+}

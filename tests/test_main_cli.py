@@ -1,5 +1,6 @@
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import main
@@ -62,6 +63,14 @@ class MainCliTests(unittest.TestCase):
             main.resolve_interactive_source(args, input_func=lambda _: "sample.mp4")
 
         self.assertEqual(args.video, "sample.mp4")
+
+    def test_empty_video_source_is_rejected_before_opening_capture(self):
+        empty_capture = SimpleNamespace(isOpened=lambda: False)
+        with patch.object(main.cv2, "VideoCapture", return_value=empty_capture) as capture:
+            result = main.open_video_source(SimpleNamespace(video="   ", camera=0))
+
+        self.assertFalse(result.isOpened())
+        capture.assert_called_once_with()
 
 
 if __name__ == "__main__":

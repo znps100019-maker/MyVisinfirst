@@ -49,6 +49,10 @@ def resolve_or_download_video(url, project_root):
     Resolve direct video or download YouTube video using yt-dlp.
     Returns a web-accessible relative URL path.
     """
+    if not isinstance(url, str) or not url.strip():
+        return {"status": "error", "message": "未提供影片網址"}
+
+    url = url.strip()
     clean_url = url.split("?")[0].lower()
     if clean_url.endswith((".mp4", ".webm", ".ogg", ".mov")):
         return {"status": "ok", "url": url, "type": "direct"}
@@ -183,6 +187,13 @@ class QuietHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         f.seek(start)
         return RangeFileWrapper(f, content_length)
 
+    def copyfile(self, source, outputfile):
+        """Ignore client disconnection errors when streaming video."""
+        try:
+            super().copyfile(source, outputfile)
+        except (ConnectionResetError, BrokenPipeError):
+            pass
+
     def log_message(self, format, *args):
         # 只顯示重大錯誤，保持終端機清爽
         if "404" in str(args) or "500" in str(args):
@@ -217,7 +228,7 @@ def main():
     print("  使用說明：")
     print("  1. 瀏覽器若未自動彈出，請複製上方網址至瀏覽器貼上。")
     print("  2. 在網頁中點擊「啟動攝影機」並允許相機權限即可開始即時辨識。")
-    print("  3. 若欲部署至 GitHub Pages：將 web 目錄部署至 gh-pages 即可！")
+    print("  3. 支援丟入 YouTube 或 MP4 影片連結進行離線/線上逐影格分析！")
     print("  4. 隨時可按 Ctrl + C 停止伺服器。")
     print("=" * 60, flush=True)
 
@@ -228,13 +239,16 @@ def main():
         print(f"無法自動開啟瀏覽器，請手動開啟網址：{url} ({exc})", flush=True)
 
     try:
-        # Allow reuse address to avoid WinError 10048
-        socketserver.TCPServer.allow_reuse_address = True
-        with socketserver.TCPServer(("", port), QuietHTTPRequestHandler) as httpd:
+        # 使用 ThreadingHTTPServer 支援多線程並行處理（影片串流與頁面載入不互相阻塞）
+        http.server.ThreadingHTTPServer.allow_reuse_address = True
+        with http.server.ThreadingHTTPServer(("127.0.0.1", port), QuietHTTPRequestHandler) as httpd:
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n[伺服器已停止] 感謝使用專題展示系統！")
         sys.exit(0)
+    except Exception as exc:
+        print(f"[伺服器終止] {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

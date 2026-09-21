@@ -23,7 +23,13 @@
 ### 🚀 一鍵本機啟動網頁
 
 ```powershell
+# 若已啟用專案環境
 python run_web.py
+
+# 找不到全域 python 時，直接載入 fallback 並啟動網頁
+. .\scripts\resolve_python.ps1
+$python = Resolve-ProjectPython -ProjectRoot (Resolve-Path .)
+& $python run_web.py
 ```
 > 執行後將自動開啟瀏覽器前往 `http://127.0.0.1:8080/web/`。允許攝影機存取後即可開始體驗。
 
@@ -57,7 +63,7 @@ python run_web.py
 
 ## 環境安裝與設定
 
-本專案預設使用 **Python 3.10** 環境。
+本專案預設使用 **Python 3.10** 環境。若 `.venv` 是從已移除的 Python 安裝建立，請重新建立虛擬環境，或直接使用專案內的 `.uv-python`；`scripts\resolve_python.ps1` 會在測試與相機啟動腳本中自動 fallback。
 
 1. **載入專案內置工具路徑（PowerShell 視窗）**：
    在執行任何 Git 或 Python 指令前，若您的系統沒有全域安裝 Git，可載入專案內置環境：

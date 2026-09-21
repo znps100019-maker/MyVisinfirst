@@ -512,7 +512,7 @@ function addWordToSentence(word) {
 
 function renderSentenceUI() {
   if (sentenceList.length === 0) {
-    sentenceContainer.innerHTML = '<span class="placeholder-text">比出穩定手勢後，系統會自動將單字組裝為語句...</span>';
+    sentenceContainer.innerHTML = '<span class="placeholder-text">比出穩定手勢後，系統會將分類結果記錄在這裡...</span>';
     return;
   }
 
@@ -685,7 +685,7 @@ function handleClassroomFeedback(label, confidence) {
       practiceFeedbackBox.className = 'practice-feedback-box matched';
       feedbackIcon.textContent = '🎉';
       feedbackTitle.textContent = `太棒了！成功比出【${practiceTargetWord.textContent}】！`;
-      feedbackDesc.textContent = `模型信心度達 ${pct}%，手勢姿勢標準！`;
+      feedbackDesc.textContent = `模型分數達 ${pct}%，手勢姿態符合目前分類。`;
       if (practiceMatchStreak === 3) {
         playSuccessChime();
       }
@@ -1075,6 +1075,19 @@ async function startWebcam() {
     loadingOverlay.classList.add('hidden');
   } catch (err) {
     console.error('開啟攝影機失敗:', err);
+    if (camera) {
+      try {
+        await camera.stop();
+      } catch (stopErr) {
+        console.warn('清理攝影機失敗:', stopErr);
+      }
+      camera = null;
+    }
+    videoElement.srcObject = null;
+    isCameraRunning = false;
+    toggleCameraText.textContent = '啟動攝影機';
+    toggleCameraBtn.classList.remove('btn-danger');
+    toggleCameraBtn.classList.add('btn-primary');
     loadingMsg.textContent = `無法開啟攝影機：${err.message || err}`;
   }
 }
