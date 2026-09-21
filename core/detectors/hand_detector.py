@@ -225,7 +225,17 @@ class HandSignRecognizer:
                 },
             ])
         if face_expression:
-            rows.append({"text": f"表情: {face_expression}", "color": (255, 200, 0), "font_size": 22})
+            # 依情緒自動套用專屬色彩（怒:紅色、哀:藍色、喜/樂:金黃/青綠、平靜:淡黃）
+            color = (0, 240, 255)
+            if "怒" in face_expression:
+                color = (60, 60, 255)
+            elif "哀" in face_expression:
+                color = (255, 180, 70)
+            elif "樂" in face_expression:
+                color = (0, 255, 180)
+            elif "平靜" in face_expression:
+                color = (210, 210, 210)
+            rows.append({"text": f"表情: {face_expression}", "color": color, "font_size": 22})
         if target_sign:
             target_sign = self.normalize_sign(target_sign)
             detected = self.is_target_detected(target_sign)

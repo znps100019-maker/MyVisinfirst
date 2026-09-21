@@ -212,14 +212,25 @@ python main.py --camera 1
 *   `Number 10 (Two hands)` (雙手伸直手指總數為 10，即雙手五指全開)
 *   *備註：若雙手手指總數小於 6，將會顯示 `"Two hands (X fingers)"`。需要分開顯示時，請使用 `--separate-hands`。*
 
-### 3. 臉部表情辨識 (Facial Expression)
-系統支援偵測以下臉部特徵與表情狀態：
-*   `Neutral` (無表情 / 正常狀態)
-*   `Smiling` (微笑)
-*   `Mouth Open` (張開嘴巴 / 驚訝)
-*   `Blink` (雙眼閉合 / 眨眼)
-*   `Wink Left` (眨左眼：左眼閉合，右眼張開)
-*   `Wink Right` (眨右眼：右眼閉合，左眼張開)
+### 3. 臉部表情辨識 (Facial Expression Recognition)
+
+系統基於 MediaPipe FaceMesh (478 個 3D 臉部特徵點) 與臉部動作編碼系統 (FACS Action Units)，支援傳統華人/台灣手語四大核心非手部訊號（NMS）**「喜、怒、哀、樂」** 與 **「平靜」** 的即時連續分類，並以專屬色調在 HUD 儀表板上高亮呈現：
+
+*   😊 **`喜 (Happy / 微笑)`**：AU12 提口角肌作動，嘴角上揚擴展，眼神放鬆。
+*   😠 **`怒 (Angry / 生氣)`**：AU4 皺眉肌與降眉肌緊縮，眉心距離縮短，眉眼壓低。
+*   😢 **`哀 (Sad / 難過)`**：AU15 降口角肌作動，嘴角下垂，內眉角微挑八字眉。
+*   😄 **`樂 (Joy / 大笑)`**：AU12 + AU25/AU26，嘴巴張開同時笑容完全綻放，笑逐顏開。
+*   😐 **`平靜 (Neutral)`**：臉部各處肌肉處於放鬆平衡之基線狀態。
+*   *微表情動作元支援*：`[閉眼/眨眼]`、`[眨左眼]`、`[眨右眼]`、`[張嘴驚訝]`。
+
+#### 🌐 網路開源臉部表情資料集 (FER Datasets) 支援
+專案附帶完整資料集研究指引與下載工具：
+*   **[TFEID 台灣本土臉部表情資料庫](https://bml.ym.edu.tw/tfeid/)**（陽明交大/台大腦與心智實驗室）：專為台灣/東亞受試者建立之高品質面部表情庫，最契合台灣手語表情研究。
+*   **[FER-2013](https://www.kaggle.com/datasets/msambare/fer2013)**（Kaggle 3.5 萬張標註影像，7 類表情）。
+*   **[AffectNet](http://mohammadmahoor.com/affectnet/)**（全球最大自然環境 42 萬張標註人臉庫）。
+*   **[CK+ (Extended Cohn-Kanade)](https://www.jeffcohn.net/Resources/)**（FACS Action Units 肌肉動作元實驗室基準）。
+*   *詳細對照表與下載請參閱*：[`docs/facial_expression_datasets.md`](docs/facial_expression_datasets.md)
+*   *資料集下載與評測腳本*：`python tools/download_expression_dataset.py --info`
 
 ---
 
