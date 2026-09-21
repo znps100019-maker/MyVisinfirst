@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 台灣手語即時辨識系統 | 專題展示網頁</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- MediaPipe Hands CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- 頂部導航與標題 -->
+    <header class="app-header">
+      <div class="logo-group">
+        <div class="logo-icon">🤟</div>
+        <div class="logo-text">
+          <h1>AI 台灣手語即時辨識系統</h1>
+          <p class="subtitle">雙手 126 維空間特徵 × KNN 機器學習引擎</p>
+        </div>
+      </div>
+      <div class="header-badges">
+        <div class="status-badge" id="modelStatusBadge">
+          <span class="status-dot pulsing"></span>
+          <span class="status-label">模型載入中...</span>
+        </div>
+        <div class="info-badge">
+          <span class="badge-icon">📚</span>
+          <span class="badge-text" id="vocabCountBadge">519 手語詞彙</span>
+        </div>
+        <div class="info-badge">
+          <span class="badge-icon">⚡</span>
+          <span class="badge-text">純前端邊緣運算</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主要工作區：左右雙欄佈局 -->
+    <main class="main-dashboard">
+      <!-- 左側：偵測過程 (Detection Process) -->
+      <section class="panel-column process-column">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <span class="panel-badge">PROCESS</span>
+            <h2>即時偵測過程 (Detection Process)</h2>
+          </div>
+          <div class="stream-stats">
+            <span class="stat-pill"><strong id="fpsVal">0</strong> FPS</span>
+            <span class="stat-pill"><strong id="latencyVal">0</strong> ms 延遲</span>
+          </div>
+        </div>
+
+        <!-- 視訊視窗與骨架畫布 -->
+        <div class="viewport-wrapper">
+          <video id="webcamVideo" playsinline muted></video>
+          <canvas id="outputCanvas"></canvas>
+          <div class="viewport-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <p id="loadingMsg">正在啟動 MediaPipe 手部追蹤模型...</p>
+          </div>
+          <div class="tracking-hud" id="trackingHud">
+            <span class="hud-pill" id="handCountHud">未偵測到手部</span>
+            <span class="hud-pill" id="landmarkConfHud">手部關節追蹤中</span>
+          </div>
+        </div>
+
+        <!-- 輸入來源與控制列 -->
+        <div class="control-toolbar">
+          <button class="btn btn-primary" id="toggleCameraBtn">
+            <span class="btn-icon">📷</span> <span id="toggleCameraText">啟動攝影機</span>
+          </button>
+          <button class="btn btn-secondary" id="flipMirrorBtn" title="鏡像水平翻轉">
+            <span class="btn-icon">🪞</span> 鏡像翻轉
+          </button>
+          <label class="btn btn-secondary upload-label">
+            <span class="btn-icon">📁</span> 選擇影片測試
+            <input type="file" id="videoFileInput" accept="video/*" style="display: none;">
+          </label>
+        </div>
+
+        <!-- 偵測過程透視：KNN Top-K 鄰近候選透視表 -->
+        <div class="card process-card">
+          <div class="card-header">
+            <h3>🔬 KNN 演算法決策透視 (Top-9 鄰近候選比對)</h3>
+            <span class="info-tag">126 維歐式距離加權</span>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="knn-table">
+                <thead>
+                  <tr>
+                    <th>排名</th>
+                    <th>候選詞彙</th>
+                    <th>空間距離</th>
+                    <th>投票權重比</th>
+                  </tr>
+                </thead>
+                <tbody id="knnTableBody">
+                  <tr><td colspan="4" class="empty-hint">等待手部進入畫面...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 偵測過程透視：手指關節伸展狀態 -->
+        <div class="card process-card">
+          <div class="card-header">
+            <h3>🖐️ 手指伸展即時姿態 (Finger States)</h3>
+            <span class="info-tag">幾何關節角分析</span>
+          </div>
+          <div class="card-body">
+            <div class="finger-status-grid" id="fingerStatusGrid">
+              <div class="finger-chip" id="fingerThumb"><span class="chip-name">拇指</span><span class="chip-state">-</span></div>
+              <div class="finger-chip" id="fingerIndex"><span class="chip-name">食指</span><span class="chip-state">-</span></div>
+              <div class="finger-chip" id="fingerMiddle"><span class="chip-name">中指</span><span class="chip-state">-</span></div>
+              <div class="finger-chip" id="fingerRing"><span class="chip-name">無名指</span><span class="chip-state">-</span></div>
+              <div class="finger-chip" id="fingerPinky"><span class="chip-name">小指</span><span class="chip-state">-</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右側：偵測結果 (Detection Results) -->
+      <section class="panel-column results-column">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <span class="panel-badge result-badge">RESULTS</span>
+            <h2>辨識結果展示 (Detection Results)</h2>
+          </div>
+          <div class="result-status-indicator" id="decisionStatus">
+            <span class="status-icon">⏳</span> 等待手勢
+          </div>
+        </div>
+
+        <!-- 主結果展示卡片 (Hero Result Card) -->
+        <div class="hero-result-card">
+          <div class="hero-label">當前手語辨識目標</div>
+          <div class="hero-word-display" id="heroSignWord">準備中...</div>
+          <div class="hero-metrics">
+            <div class="metric-item">
+              <span class="metric-title">模型信心度</span>
+              <div class="metric-value-group">
+                <div class="confidence-bar-bg">
+                  <div class="confidence-bar-fill" id="confBarFill" style="width: 0%;"></div>
+                </div>
+                <span class="metric-number" id="heroConfidence">0%</span>
+              </div>
+            </div>
+            <div class="metric-item">
+              <span class="metric-title">時間一致性狀態</span>
+              <span class="stability-tag unconfirmed" id="stabilityTag">確認中</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 連續手語語句時間軸 (Sentence Timeline) -->
+        <div class="card sentence-card">
+          <div class="card-header">
+            <h3>📝 手語語句累積串接 (Sentence Builder)</h3>
+            <div class="card-actions">
+              <button class="btn btn-xs" id="copySentenceBtn" title="複製句子">📋 複製</button>
+              <button class="btn btn-xs btn-danger" id="clearSentenceBtn" title="清除紀錄">🗑️ 清除</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="sentence-box" id="sentenceContainer">
+              <span class="placeholder-text">比出穩定手勢後，系統會自動將單字組裝為語句...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 519 詞彙字典查詢器 -->
+        <div class="card vocab-card">
+          <div class="card-header">
+            <h3>📖 資料庫支援詞彙速查 (519 詞庫)</h3>
+            <input type="text" id="vocabSearchInput" class="search-input" placeholder="搜尋手語單字...">
+          </div>
+          <div class="card-body vocab-body">
+            <div class="vocab-chips-container" id="vocabContainer">
+              <div class="loading-sub">載入詞庫中...</div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span id="vocabMatchCount">顯示 519 個詞彙</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 底部說明 -->
+    <footer class="app-footer">
+      <p>MyVisinfirst 手語視覺辨識專題展示系統 ｜ 採用 MediaPipe Hands 關節點追蹤 ＆ 126 維 KNN 相對座標演算法</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
