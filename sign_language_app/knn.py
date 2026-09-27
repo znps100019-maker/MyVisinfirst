@@ -6,7 +6,7 @@ def euclidean_distance(vector_a, vector_b):
     return math.sqrt(sum((a - b) ** 2 for a, b in zip(vector_a, vector_b)))
 
 
-def classify_knn(query_vector, samples, k=9):
+def classify_knn(query_vector, samples, k=5, max_distance=None):
     """Classify landmarks with distance-weighted KNN voting."""
     if not samples:
         return "Unknown", 0.0
@@ -19,6 +19,10 @@ def classify_knn(query_vector, samples, k=9):
         ),
         key=lambda item: item[0],
     )[:k]
+
+    # 距離過濾（186 維時建議 22～28，可依實測調整）
+    if max_distance is not None and neighbors[0][0] > max_distance:
+        return "Unknown", 0.0
 
     votes = defaultdict(float)
     for distance, label in neighbors:
