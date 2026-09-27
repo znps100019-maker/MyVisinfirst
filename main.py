@@ -444,15 +444,17 @@ def process_video_loop(cap, sign_recognizer, face_recognizer, args, target_sign)
             img = cv2.flip(img, 1)
         frame_count += 1
 
-        hand_detections = sign_recognizer.process(img)
-        stable_status = sign_recognizer.stable_status
-
         face_data = None
         face_expression = None
+        face_landmarks = None
         if face_recognizer:
             face_data = face_recognizer.process(img)
             if face_data:
                 face_expression = face_data["expression"]
+                face_landmarks = face_data.get("landmarks")
+
+        hand_detections = sign_recognizer.process(img, face_landmarks=face_landmarks)
+        stable_status = sign_recognizer.stable_status
 
         now = time.time()
         target_detected = bool(target_sign and sign_recognizer.is_target_detected(target_sign))
