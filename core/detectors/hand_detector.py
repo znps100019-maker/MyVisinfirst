@@ -2,6 +2,7 @@ from collections import Counter, deque
 import json
 import math
 import os
+import statistics
 
 import cv2
 import mediapipe as mp
@@ -14,89 +15,24 @@ except ImportError:
     draw_panel = None
     draw_text = None
 
-
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
 
 class HandSignRecognizer:
-    """Detect hand landmarks, classify static hand signs, and optionally use KNN."""
+    """完全基於 KNN 的動態手語辨識器（無規則式）"""
 
-    THUMB_STRAIGHT_THRESHOLD = 0.86
-    FINGER_STRAIGHT_THRESHOLD = 0.82
-    FINGER_WRIST_EXTENSION_RATIO = 1.1
-    THUMB_SPREAD_THRESHOLD = 0.58
-    OK_PINCH_THRESHOLD = 0.38
     STABLE_CONFIDENCE_THRESHOLD = 0.6
-
     KNN_K = 5
     KNN_MIN_CONFIDENCE = 0.5
-
-    FINGER_TIPS = {
-        "thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20,
-    }
-    FINGER_PIPS = {
-        "index": 6, "middle": 10, "ring": 14, "pinky": 18,
-    }
-    FINGER_MCPS = {
-        "thumb": 2, "index": 5, "middle": 9, "ring": 13, "pinky": 17,
-    }
-    LANDMARK_NAMES = [
-        "wrist", "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb_tip",
-        "index_mcp", "index_pip", "index_dip", "index_tip",
-        "middle_mcp", "middle_pip", "middle_dip", "middle_tip",
-        "ring_mcp", "ring_pip", "ring_dip", "ring_tip",
-        "pinky_mcp", "pinky_pip", "pinky_dip", "pinky_tip",
-    ]
 
     FACE_KEY_INDICES = [
         33, 133, 159, 145, 362, 263, 386, 374,
         1, 2, 98, 327, 61, 291, 13, 14, 78, 308, 82, 312,
     ]
 
-    AVAILABLE_SIGNS = [
-        "Fist (Solidarity)",
-        "OK (Zero / Can)",
-        "Number 1 (Secret)",
-        "Number 2 (Victory)",
-        "Number 3",
-        "Number 4 (Salute)",
-        "Number 5 (Hello / Greet)",
-        "Number 6",
-        "Number 7 (Gun)",
-        "Number 8",
-        "Number 9",
-        "Good / Male (Thumbs up)",
-        "Bad / Female (Pinky)",
-        "I love you",
-        "Cow / Horns",
-        "Number 6 (Two hands)",
-        "Number 7 (Two hands)",
-        "Number 8 (Two hands)",
-        "Number 9 (Two hands)",
-        "Number 10 (Two hands)",
-        "Unknown",
-        "No hand",
-    ]
-
-    SIGN_ALIASES = {
-        "1": "Number 1 (Secret)", "2": "Number 2 (Victory)", "3": "Number 3",
-        "4": "Number 4 (Salute)", "5": "Number 5 (Hello / Greet)", "6": "Number 6",
-        "7": "Number 7 (Gun)", "8": "Number 8", "9": "Number 9",
-        "10": "Number 10 (Two hands)", "secret": "Number 1 (Secret)",
-        "victory": "Number 2 (Victory)", "salute": "Number 4 (Salute)",
-        "hello": "Number 5 (Hello / Greet)", "greet": "Number 5 (Hello / Greet)",
-        "gun": "Number 7 (Gun)", "good": "Good / Male (Thumbs up)",
-        "male": "Good / Male (Thumbs up)", "bad": "Bad / Female (Pinky)",
-        "female": "Bad / Female (Pinky)", "thumbs up": "Good / Male (Thumbs up)",
-        "pinky": "Bad / Female (Pinky)", "cow": "Cow / Horns", "horns": "Cow / Horns",
-        "i love you": "I love you", "ok": "OK (Zero / Can)", "zero": "OK (Zero / Can)",
-        "can": "OK (Zero / Can)", "fist": "Fist (Solidarity)",
-    }
-
     def __init__(self, max_num_hands=2, history_size=8, stable_min_count=5,
-                 combine_two_hands=True, use_knn=True,
-                 no_hand_reset_frames=3):
+                 combine_two_hands=True, use_knn=True):
         self.hands = mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=max_num_hands,
@@ -105,14 +41,14 @@ class HandSignRecognizer:
         )
         self.history = deque(maxlen=history_size)
         self.stable_min_count = stable_min_count
-        self.combine_two_hands = combine_two_hands
         self.sentence = []
         self.last_added_sign = None
+        self.combine_two_hands = combine_two_hands
         self.use_knn = use_knn
         self.current_knn_confidence = 0.0
+        self.knn_window = deque(maxlen=30)
 
         self.knn_samples = []
-        self.knn_window = deque(maxlen=15)
         if self.use_knn:
             model_path = os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "..", "..",
@@ -123,8 +59,6 @@ class HandSignRecognizer:
                     with open(model_path, "r", encoding="utf-8") as handle:
                         self.knn_samples = json.load(handle).get("samples", [])
                     print(f"KNN 模型載入成功：{len(self.knn_samples)} 筆樣本")
-                else:
-                    print(f"KNN 模型不存在：{model_path}")
             except (OSError, ValueError) as exc:
                 print(f"KNN 模型載入失敗：{exc}")
 
@@ -137,7 +71,7 @@ class HandSignRecognizer:
         if not results.multi_hand_landmarks:
             self.history.append("No hand")
             self.current_knn_confidence = 0.0
-            self.knn_window.clear() 
+            self.knn_window.clear()
             return detections
 
         handedness_list = results.multi_handedness or []
@@ -146,25 +80,25 @@ class HandSignRecognizer:
             handedness = "Unknown"
             if index < len(handedness_list):
                 handedness = handedness_list[index].classification[0].label
-            fingers = self._extended_fingers(landmarks, handedness)
-            sign = self._classify_sign(fingers, landmarks)
+            
             detections.append({
                 "landmarks": landmarks,
                 "handedness": handedness,
-                "fingers": fingers,
-                "sign": sign,
+                "fingers": {},
+                "sign": "Unknown",
                 "joint_points": self.joint_points(frame, landmarks),
             })
 
         knn_sign = "Unknown"
         knn_confidence = 0.0
         if self.use_knn and self.knn_samples:
+            # 呼叫底下的完美特徵提取
             vector = self._normalize_landmarks(
                 results.multi_hand_landmarks, face_landmarks
             )
-            # 加入滑動視窗
+            
+            # 滑動視窗平均
             self.knn_window.append(vector)
-            # 用視窗內的平均向量做 KNN
             if len(self.knn_window) > 0:
                 window_list = list(self.knn_window)
                 avg_vector = [
@@ -172,42 +106,88 @@ class HandSignRecognizer:
                     for d in range(len(window_list[0]))
                 ]
                 knn_sign, knn_confidence = self._classify_knn(avg_vector, k=self.KNN_K)
-            RULE_PRIORITY_SIGNS = {
-                "Number 1 (Secret)", "Number 2 (Victory)", "Number 3",
-                "Number 4 (Salute)", "Number 5 (Hello / Greet)", "Number 6",
-                "Number 7 (Gun)", "Number 8", "Number 9",
-                "OK (Zero / Can)", "Fist (Solidarity)",
-            }
+            
+            # 覆蓋結果
             for detection in detections:
-                rule_sign = detection["sign"]
-                # KNN 信心度 ≥ 90% → 無條件覆蓋（即使規則式判數字）
-                if (knn_sign != "Unknown"
-                        and knn_confidence >= 0.90):
+                if (knn_sign != "Unknown" and knn_confidence >= self.KNN_MIN_CONFIDENCE):
                     detection["sign"] = knn_sign
-                # 規則式判數字/OK/Fist，且 KNN 信心度不高 → 保留規則式
-                elif rule_sign in RULE_PRIORITY_SIGNS:
-                    continue
-                # 其他情況 → 用 KNN
-                elif (knn_sign != "Unknown"
-                        and knn_confidence >= self.KNN_MIN_CONFIDENCE):
-                    detection["sign"] = knn_sign
-        else:
-            self.knn_window.clear()
+                else:
+                    detection["sign"] = "Unknown"
+                    
         self.current_knn_confidence = knn_confidence
 
-        if len(detections) >= 2:
-            total_extended = sum(detections[0]["fingers"].values()) + sum(
-                detections[1]["fingers"].values()
-            )
-            if 6 <= total_extended <= 10:
-                self.history.append(f"Number {total_extended} (Two hands)")
-            else:
-                self.history.append(f"Two hands ({total_extended} fingers)")
-        elif len(detections) == 1:
+        if len(detections) >= 1:
             self.history.append(detections[0]["sign"])
 
         self._update_sentence()
         return detections
+
+    def _normalize_landmarks(self, multi_hand_landmarks, face_landmarks=None):
+        """
+        【核心修正】完美分離左右手與臉部特徵，總計 186 維。
+        """
+        hands_data = []
+        if multi_hand_landmarks:
+            for h in multi_hand_landmarks:
+                hands_data.append([{"x": p.x, "y": p.y, "z": p.z} for p in h.landmark])
+        
+        # 1. 將手按 X 座標排序（左邊永遠是左手，右邊永遠是右手）
+        hands_data = sorted(hands_data, key=lambda h: h[0]["x"])
+        
+        # 2. 提取雙手特徵 (各 63 維)
+        hand_vec = []
+        for i in range(2):
+            if i < len(hands_data):
+                hand = hands_data[i]
+                wrist = hand[0]
+                middle_mcp = hand[9]
+                scale = math.sqrt((middle_mcp["x"] - wrist["x"])**2 + (middle_mcp["y"] - wrist["y"])**2 + (middle_mcp["z"] - wrist["z"])**2) or 1e-6
+                for p in hand:
+                    hand_vec.extend([
+                        (p["x"] - wrist["x"]) / scale,
+                        (p["y"] - wrist["y"]) / scale,
+                        (p["z"] - wrist["z"]) / scale,
+                    ])
+            else:
+                hand_vec.extend([0.0] * 63) # 單手時另一隻手補 0
+
+        # 3. 提取臉部特徵 (60 維)
+        face_vec = []
+        if face_landmarks:
+            pts = face_landmarks.landmark
+            nose = pts[1]
+            left_eye = pts[33]
+            right_eye = pts[263]
+            fscale = math.sqrt((left_eye.x - right_eye.x)**2 + (left_eye.y - right_eye.y)**2) or 1e-6
+            for idx in self.FACE_KEY_INDICES:
+                p = pts[idx]
+                face_vec.extend([
+                    (p.x - nose.x) / fscale,
+                    (p.y - nose.y) / fscale,
+                    (p.z - nose.z) / fscale,
+                ])
+        else:
+            face_vec.extend([0.0] * 60)
+
+        return hand_vec + face_vec
+
+    def _classify_knn(self, vector, k=5):
+        if not self.knn_samples:
+            return "Unknown", 0.0
+        neighbors = []
+        for sample in self.knn_samples:
+            dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(vector, sample["vector"])))
+            neighbors.append((dist, sample["label"]))
+        neighbors.sort(key=lambda item: item[0])
+        top_k = neighbors[:min(k, len(neighbors))]
+        votes = Counter()
+        for distance, label in top_k:
+            votes[label] += 1.0 / max(distance, 1e-6)
+        total = sum(votes.values())
+        if total <= 0:
+            return "Unknown", 0.0
+        best_label, best_weight = max(votes.items(), key=lambda item: item[1])
+        return best_label, best_weight / total
 
     def draw(self, frame, detections, target_sign=None, face_expression=None):
         self._draw_hands(frame, detections)
@@ -242,16 +222,6 @@ class HandSignRecognizer:
             rows.append({
                 "text": f"表情: {face_expression}",
                 "color": (255, 200, 0),
-                "font_size": 22,
-            })
-        if target_sign:
-            target_sign = self.normalize_sign(target_sign)
-            detected = self.is_target_detected(target_sign)
-            color = (0, 255, 0) if detected else (180, 180, 180)
-            text = "目標完成" if detected else "等待目標"
-            rows.append({
-                "text": f"{text}: {display_label(target_sign)}",
-                "color": color,
                 "font_size": 22,
             })
 
@@ -292,72 +262,6 @@ class HandSignRecognizer:
                 position, cv2.FONT_HERSHEY_SIMPLEX, font_size / 32, color, 2,
             )
 
-    def _normalize_landmarks(self, multi_hand_landmarks, face_landmarks=None):
-        hand_vec = []
-        if multi_hand_landmarks:
-            hand1 = multi_hand_landmarks[0].landmark
-            wrist, middle_mcp = hand1[0], hand1[9]
-            scale = math.sqrt(
-                (middle_mcp.x - wrist.x) ** 2 +
-                (middle_mcp.y - wrist.y) ** 2 +
-                (middle_mcp.z - wrist.z) ** 2
-            ) or 1e-6
-            for p in hand1:
-                hand_vec.extend([
-                    (p.x - wrist.x) / scale,
-                    (p.y - wrist.y) / scale,
-                    (p.z - wrist.z) / scale,
-                ])
-            if len(multi_hand_landmarks) > 1:
-                for p in multi_hand_landmarks[1].landmark:
-                    hand_vec.extend([
-                        (p.x - wrist.x) / scale,
-                        (p.y - wrist.y) / scale,
-                        (p.z - wrist.z) / scale,
-                    ])
-        hand_vec.extend([0.0] * (126 - len(hand_vec)))
-        hand_vec = hand_vec[:126]
-
-        face_vec = []
-        if face_landmarks:
-            pts = face_landmarks.landmark
-            nose = pts[1]
-            left_eye = pts[33]
-            right_eye = pts[263]
-            fscale = math.sqrt(
-                (left_eye.x - right_eye.x) ** 2 +
-                (left_eye.y - right_eye.y) ** 2
-            ) or 1e-6
-            for idx in self.FACE_KEY_INDICES:
-                p = pts[idx]
-                face_vec.extend([
-                    (p.x - nose.x) / fscale,
-                    (p.y - nose.y) / fscale,
-                    (p.z - nose.z) / fscale,
-                ])
-        face_vec.extend([0.0] * (60 - len(face_vec)))
-        face_vec = face_vec[:60]
-
-        return hand_vec + face_vec
-
-    def _classify_knn(self, vector, k=5):
-        if not self.knn_samples:
-            return "Unknown", 0.0
-        neighbors = []
-        for sample in self.knn_samples:
-            dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(vector, sample["vector"])))
-            neighbors.append((dist, sample["label"]))
-        neighbors.sort(key=lambda item: item[0])
-        top_k = neighbors[:min(k, len(neighbors))]
-        votes = Counter()
-        for distance, label in top_k:
-            votes[label] += 1.0 / max(distance, 1e-6)
-        total = sum(votes.values())
-        if total <= 0:
-            return "Unknown", 0.0
-        best_label, best_weight = max(votes.items(), key=lambda item: item[1])
-        return best_label, best_weight / total
-
     @property
     def stable_sign(self):
         return self.stable_status["sign"]
@@ -383,37 +287,13 @@ class HandSignRecognizer:
     def normalize_sign(cls, sign):
         if not sign:
             return ""
-        cleaned = str(sign).strip()
-        lowered = cleaned.lower()
-        if lowered in cls.SIGN_ALIASES:
-            return cls.SIGN_ALIASES[lowered]
-        for available in cls.AVAILABLE_SIGNS:
-            if lowered == available.lower():
-                return available
-        return cleaned
+        return str(sign).strip()
 
     @classmethod
     def target_matches(cls, stable_sign, target_sign, is_stable=True):
         if not target_sign or not is_stable:
             return False
-        stable_sign = cls.normalize_sign(stable_sign)
-        target_sign = cls.normalize_sign(target_sign)
-        if stable_sign == target_sign:
-            return True
-        stable_number = cls._sign_number(stable_sign)
-        target_number = cls._sign_number(target_sign)
-        return (
-            stable_number is not None
-            and stable_number == target_number
-            and "(Two hands)" in stable_sign
-        )
-
-    @staticmethod
-    def _sign_number(sign):
-        if not sign.startswith("Number "):
-            return None
-        value = sign.removeprefix("Number ").split(" ", 1)[0]
-        return int(value) if value.isdigit() else None
+        return cls.normalize_sign(stable_sign) == cls.normalize_sign(target_sign)
 
     def is_target_detected(self, target_sign):
         stable = self.stable_status
@@ -433,128 +313,6 @@ class HandSignRecognizer:
         self.sentence = []
         self.last_added_sign = None
 
-    def _extended_fingers(self, landmarks, handedness):
-        points = landmarks.landmark
-        fingers = {}
-        wrist = points[0]
-        for finger in self.FINGER_TIPS:
-            if finger == "thumb":
-                fingers[finger] = self._is_thumb_extended(points, handedness)
-                continue
-            base_idx = self.FINGER_MCPS[finger]
-            mcp = points[base_idx]
-            pip = points[base_idx + 1]
-            dip = points[base_idx + 2]
-            tip = points[base_idx + 3]
-            straight = self._distance(mcp, tip)
-            segments = (
-                self._distance(mcp, pip)
-                + self._distance(pip, dip)
-                + self._distance(dip, tip)
-            )
-            is_straight = straight / max(segments, 0.001) > self.FINGER_STRAIGHT_THRESHOLD
-            d_wrist_tip = self._distance(wrist, tip)
-            d_wrist_pip = self._distance(wrist, pip)
-            is_extended_from_wrist = (
-                d_wrist_tip > d_wrist_pip * self.FINGER_WRIST_EXTENSION_RATIO
-            )
-            fingers[finger] = is_straight and is_extended_from_wrist
-        return fingers
-
-    def _is_thumb_extended(self, points, handedness):
-        cmc = points[1]
-        mcp = points[2]
-        ip = points[3]
-        tip = points[4]
-        wrist = points[0]
-        index_mcp = points[self.FINGER_MCPS["index"]]
-        middle_mcp = points[self.FINGER_MCPS["middle"]]
-        straight = self._distance(cmc, tip)
-        segments = (
-            self._distance(cmc, mcp)
-            + self._distance(mcp, ip)
-            + self._distance(ip, tip)
-        )
-        straight_ratio = straight / max(segments, 0.001)
-        palm_size = max(self._distance(wrist, middle_mcp), 0.001)
-        spread_from_palm = self._distance(tip, index_mcp) / palm_size
-        lifted_from_wrist = self._distance(wrist, tip) > self._distance(wrist, ip) * 1.02
-        return (
-            straight_ratio > self.THUMB_STRAIGHT_THRESHOLD
-            and (spread_from_palm > 0.35 or lifted_from_wrist)
-        )
-
-    def _thumb_spread_ratio(self, landmarks):
-        points = landmarks.landmark
-        thumb_tip = points[self.FINGER_TIPS["thumb"]]
-        index_mcp = points[self.FINGER_MCPS["index"]]
-        wrist = points[0]
-        middle_mcp = points[self.FINGER_MCPS["middle"]]
-        distance = self._distance(thumb_tip, index_mcp)
-        palm_size = max(self._distance(wrist, middle_mcp), 0.001)
-        return distance / palm_size
-
-    def _classify_sign(self, fingers, landmarks):
-        thumb = fingers["thumb"]
-        index = fingers["index"]
-        middle = fingers["middle"]
-        ring = fingers["ring"]
-        pinky = fingers["pinky"]
-
-        if self._is_ok_sign(landmarks) and middle and ring and pinky:
-            return "OK (Zero / Can)"
-        if thumb and index and pinky and not middle and not ring:
-            return "I love you"
-        if pinky and not any([thumb, index, middle, ring]):
-            return "Bad / Female (Pinky)"
-        if index and pinky and not thumb and not middle and not ring:
-            return "Cow / Horns"
-        if not any(fingers.values()):
-            return "Fist (Solidarity)"
-
-        is_thumb_spread = self._thumb_spread_ratio(landmarks) > self.THUMB_SPREAD_THRESHOLD
-
-        if not is_thumb_spread:
-            if index and middle and ring and pinky:
-                return "Number 4 (Salute)"
-            if index and middle and ring and not pinky:
-                return "Number 3"
-            if index and middle and not ring and not pinky:
-                return "Number 2 (Victory)"
-            if index and not middle and not ring and not pinky:
-                return "Number 1 (Secret)"
-        else:
-            if index and middle and ring and pinky:
-                return "Number 5 (Hello / Greet)"
-            if index and middle and ring and not pinky:
-                return "Number 9"
-            if index and middle and not ring and not pinky:
-                return "Number 8"
-            if index and not middle and not ring and not pinky:
-                return "Number 7 (Gun)"
-            if pinky and not index and not middle and not ring:
-                return "Number 6"
-            if not any([index, middle, ring, pinky]):
-                return "Good / Male (Thumbs up)"
-        return "Unknown"
-
-    def _is_ok_sign(self, landmarks):
-        points = landmarks.landmark
-        thumb_tip = points[self.FINGER_TIPS["thumb"]]
-        index_tip = points[self.FINGER_TIPS["index"]]
-        wrist = points[0]
-        middle_mcp = points[self.FINGER_MCPS["middle"]]
-        pinch_distance = self._distance(thumb_tip, index_tip)
-        palm_size = max(self._distance(wrist, middle_mcp), 0.001)
-        return pinch_distance / palm_size < self.OK_PINCH_THRESHOLD
-
-    def _distance(self, point_a, point_b):
-        return math.sqrt(
-            (point_a.x - point_b.x) ** 2
-            + (point_a.y - point_b.y) ** 2
-            + (point_a.z - point_b.z) ** 2
-        )
-
     def _label_position(self, frame, landmarks):
         height, width, _ = frame.shape
         x_values = [point.x for point in landmarks.landmark]
@@ -567,7 +325,7 @@ class HandSignRecognizer:
         height, width, _ = frame.shape
         points = {}
         for index, point in enumerate(landmarks.landmark):
-            name = self.LANDMARK_NAMES[index]
+            name = self.LANDMARK_NAMES[index] if hasattr(self, 'LANDMARK_NAMES') else str(index)
             points[name] = {
                 "x": int(point.x * width),
                 "y": int(point.y * height),
